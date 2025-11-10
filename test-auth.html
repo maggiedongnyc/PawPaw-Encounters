@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Anonymous Auth</title>
+</head>
+<body>
+    <h1>Test Anonymous Authentication</h1>
+    <button onclick="testAuth()">Test Sign In Anonymously</button>
+    <div id="result"></div>
+    
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+        
+        const supabaseUrl = 'https://cxuzveadyskxgyzghfxa.supabase.co'
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4dXp2ZWFkeXNreGd5emdoZnhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3MDk1MjQsImV4cCI6MjA3ODI4NTUyNH0.x-OYGSy1282xKKG5WNcv92wiFSeDgZJ3Wuuhbwyabs4'
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+            }
+        })
+        
+        window.testAuth = async function() {
+            const resultDiv = document.getElementById('result')
+            resultDiv.innerHTML = '<p>Testing...</p>'
+            
+            try {
+                // Check session
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+                console.log('Session:', session)
+                resultDiv.innerHTML += `<p>Session check: ${session ? 'Has session' : 'No session'}</p>`
+                
+                if (sessionError) {
+                    resultDiv.innerHTML += `<p style="color: red;">Session error: ${sessionError.message}</p>`
+                }
+                
+                // Try to sign in anonymously
+                const { data, error } = await supabase.auth.signInAnonymously()
+                console.log('Sign in result:', { data, error })
+                
+                if (error) {
+                    resultDiv.innerHTML += `<p style="color: red;">Error: ${error.message}</p>`
+                    resultDiv.innerHTML += `<p style="color: red;">Status: ${error.status}</p>`
+                    if (error.message.includes('disabled') || error.message.includes('not enabled')) {
+                        resultDiv.innerHTML += `<p style="color: red; font-weight: bold;">⚠️ Anonymous authentication is NOT enabled in Supabase!</p>`
+                        resultDiv.innerHTML += `<p>Go to Supabase Dashboard > Authentication > Providers > Enable Anonymous</p>`
+                    }
+                } else if (data?.user) {
+                    resultDiv.innerHTML += `<p style="color: green;">✅ Success! User ID: ${data.user.id}</p>`
+                } else {
+                    resultDiv.innerHTML += `<p style="color: red;">No user returned</p>`
+                }
+            } catch (err) {
+                resultDiv.innerHTML += `<p style="color: red;">Exception: ${err.message}</p>`
+            }
+        }
+    </script>
+</body>
+</html>
+
