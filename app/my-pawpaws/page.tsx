@@ -628,8 +628,7 @@ export default function MyPawPawsPage() {
                             {encounter.mood}
                           </span>
                         )}
-                        </div>
-                      )}
+                      </div>
 
                       {/* Location - Neighborhood Name */}
                       {location && (

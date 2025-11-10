@@ -50,7 +50,7 @@ const createCustomIcon = (mood?: string | null, isNew?: boolean): L.DivIcon => {
   }
   const emoji = emojiMap[mood || ''] || '🐕'
   const size = 50 // Large icon size (40-60px range)
-  const iconSize = [size, size]
+  const iconSize: [number, number] = [size, size]
 
   return L.divIcon({
     className: 'custom-dog-marker-large',
