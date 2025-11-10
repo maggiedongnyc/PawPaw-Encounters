@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -23,7 +23,7 @@ interface LocationData {
 
 type Step = 1 | 2 | 3 | 4
 
-export default function UploadPage() {
+function UploadPageContent() {
   // Get authenticated user (auth is already initialized by AuthProvider)
   const { user } = useAuth()
   const router = useRouter()
@@ -867,5 +867,20 @@ export default function UploadPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-50 to-blue-50">
+        <div className="text-center">
+          <div className="text-6xl animate-spin mb-4">🐕</div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <UploadPageContent />
+    </Suspense>
   )
 }
