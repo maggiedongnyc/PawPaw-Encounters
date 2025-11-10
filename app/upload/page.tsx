@@ -149,8 +149,25 @@ function UploadPageContent() {
         setIsGettingLocation(false)
       },
       (err) => {
-        setError(`Error getting location: ${err.message}`)
+        // Handle different error types gracefully
+        if (err.code === 1) {
+          // PERMISSION_DENIED - User denied permission or it's blocked
+          setError('Location permission denied. Please use the map to select a location, or enable location permissions in your browser settings.')
+        } else if (err.code === 2) {
+          // POSITION_UNAVAILABLE - Location unavailable
+          setError('Unable to get your location. Please use the map to select a location.')
+        } else if (err.code === 3) {
+          // TIMEOUT - Request timed out
+          setError('Location request timed out. Please try again or use the map to select a location.')
+        } else {
+          // Other errors
+          setError('Unable to get your location. Please use the map to select a location.')
+        }
         setIsGettingLocation(false)
+      },
+      {
+        timeout: 10000,
+        enableHighAccuracy: false,
       }
     )
   }

@@ -24,3 +24,59 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Hero Section Animations */
+@keyframes pawFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pawFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes heroFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Background Paw Print Animations - Combined Fade-In + Float + Fade-Out */
+@keyframes fadeInFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(0px) scale(0.9);
+  }
+  75% {
+    opacity: calc(var(--target-opacity, 0.4) * 0.8); /* Fade in during first 75% (even slower) */
+    transform: translateY(-5px) scale(0.95);
+  }
+  85% {
+    opacity: var(--target-opacity, 0.5);
+    transform: translateY(-20px) scale(1); /* Float up */
+  }
+  92% {
+    opacity: var(--target-opacity, 0.5);
+    transform: translateY(0px) scale(1); /* Float back down */
+  }
+  100% {
+    opacity: 0; /* Slowly fade out */
+    transform: translateY(0px) scale(0.9);
+  }
+}

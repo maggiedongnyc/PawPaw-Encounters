@@ -565,11 +565,13 @@ export default function MyPawPawsPage() {
                 return (
                   <div
                     key={encounter.id}
-                    className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 cursor-pointer"
-                    onDoubleClick={() => handleDoubleClickEncounter(encounter)}
+                    className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
                   >
                     {/* Image */}
-                    <div className="w-full h-64 overflow-hidden bg-gray-200 relative group">
+                    <div 
+                      className="w-full h-64 overflow-hidden bg-gray-200 relative group cursor-pointer"
+                      onDoubleClick={() => handleDoubleClickEncounter(encounter)}
+                    >
                       <img
                         src={encounter.photo_url}
                         alt={encounter.description}
