@@ -16,7 +16,10 @@ export default function PawTrail({ trigger }: PawTrailProps) {
         x: 20 + (i * 8) + Math.random() * 5,
         y: 50 + Math.random() * 20,
       }))
-      setPaws(newPaws)
+      // Defer setState to avoid synchronous state update warning
+      setTimeout(() => {
+        setPaws(newPaws)
+      }, 0)
 
       setTimeout(() => {
         setPaws([])

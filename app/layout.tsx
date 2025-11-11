@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { Fredoka } from "next/font/google";
+import { Inter } from "next/font/google";
+import { Poppins } from "next/font/google";
+import { Caveat } from "next/font/google";
+import { Patrick_Hand } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Background from "@/components/Background";
@@ -8,20 +10,31 @@ import BottomNavigation from "@/components/BottomNavigation";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster } from "react-hot-toast";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  display: "swap",
 });
 
-const fredoka = Fredoka({
-  variable: "--font-fredoka",
+const caveat = Caveat({
+  variable: "--font-caveat",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+const patrickHand = Patrick_Hand({
+  variable: "--font-patrick",
+  subsets: ["latin"],
+  weight: ["400"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -44,7 +57,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} antialiased relative`}
+        className={`${inter.variable} ${poppins.variable} ${caveat.variable} ${patrickHand.variable} antialiased relative`}
       >
         <Background />
         <ErrorBoundary>
@@ -60,7 +73,7 @@ export default function RootLayout({
             style: {
               background: '#fff',
               color: '#5C3D2E',
-              fontFamily: 'var(--font-fredoka), sans-serif',
+              fontFamily: 'var(--font-poppins), sans-serif',
               borderRadius: '12px',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
             },

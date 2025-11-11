@@ -145,7 +145,7 @@ export default function NotificationDropdown({ onClose, onNotificationRead }: No
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllAsRead}
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
           >
             Mark all as read
           </button>
@@ -155,11 +155,11 @@ export default function NotificationDropdown({ onClose, onNotificationRead }: No
       {/* Notifications List */}
       <div className="overflow-y-auto flex-1">
         {loading ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
+          <div className="px-4 py-8 text-center text-sm text-gray-600">
             Loading notifications...
           </div>
         ) : notifications.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
+          <div className="px-4 py-8 text-center text-sm text-gray-600">
             No notifications yet
           </div>
         ) : (
@@ -198,7 +198,7 @@ export default function NotificationDropdown({ onClose, onNotificationRead }: No
                       {getNotificationMessage(notification)}
                     </p>
                     {notification.encounter && (
-                      <p className="text-xs text-gray-500 mt-1 truncate">
+                      <p className="text-xs text-gray-600 mt-1 truncate">
                         {notification.encounter.description}
                       </p>
                     )}
@@ -224,7 +224,7 @@ export default function NotificationDropdown({ onClose, onNotificationRead }: No
           <Link
             href="/notifications"
             onClick={onClose}
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
           >
             View all notifications
           </Link>

@@ -8,8 +8,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,13 +22,20 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+}
+
+/* Typography hierarchy - Poppins for headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-poppins), sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 /* Placeholder text styling - darker grey for better visibility */
 ::placeholder {
   color: #374151 !important; /* gray-700 - much darker grey */
-  opacity: 1 !important;
+  opacity: 0.6 !important;
 }
 
 input::placeholder,
@@ -38,7 +45,7 @@ input[type="email"]::placeholder,
 input[type="tel"]::placeholder,
 textarea::placeholder {
   color: #374151 !important; /* gray-700 - much darker grey */
-  opacity: 1 !important;
+  opacity: 0.6 !important;
 }
 
 /* Additional specificity for form inputs */
@@ -50,7 +57,7 @@ textarea[placeholder] {
 input[placeholder]::placeholder,
 textarea[placeholder]::placeholder {
   color: #374151 !important;
-  opacity: 1 !important;
+  opacity: 0.6 !important;
 }
 
 /* Select dropdown text - match placeholder color */
@@ -64,6 +71,161 @@ select option {
 
 select option[value=""] {
   color: #374151 !important; /* gray-700 - darker grey for placeholder option */
+}
+
+/* Background Gradient Animation - Sunset Pop */
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 15s ease infinite;
+}
+
+/* Bottom Sheet Animation */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from { 
+    opacity: 0; 
+  }
+  to { 
+    opacity: 1; 
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-in forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Sketchy Button Styles */
+.btn-sketchy {
+  border-radius: 45% 55% 52% 48% / 48% 50% 50% 52%;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  position: relative;
+}
+
+.btn-sketchy:hover {
+  border-radius: 50% 45% 48% 52% / 52% 48% 52% 48%;
+  transform: translateY(-2px) rotate(-1deg);
+}
+
+.btn-sketchy:active {
+  transform: translateY(1px) rotate(1deg);
+}
+
+.card-sketchy {
+  border-radius: 16px;
+  position: relative;
+  border: 2px solid transparent;
+}
+
+/* Hand-drawn wavy border effect */
+.card-sketchy::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 16px;
+  padding: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    #5C3D2E 0px,
+    #5C3D2E 2px,
+    transparent 2px,
+    transparent 4px
+  ),
+  repeating-linear-gradient(
+    0deg,
+    #5C3D2E 0px,
+    #5C3D2E 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Alternative: SVG-based sketchy border */
+.card-sketchy::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  background-image: 
+    url("data:image/svg+xml,%3Csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cfilter id='roughpaper' x='0%25' y='0%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='5' /%3E%3CfeDisplacementMap in='SourceGraphic' scale='3' /%3E%3C/filter%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='none' stroke='%235C3D2E' stroke-width='2' rx='16' filter='url(%23roughpaper)' opacity='0.4'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* Crayon-style divider */
+.divider-crayon {
+  position: relative;
+  height: 8px;
+  margin: 3rem 0;
+  overflow: visible;
+}
+
+.divider-crayon::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    #FFB500 5%, 
+    #FFC845 25%, 
+    #FFD166 50%, 
+    #FFC845 75%, 
+    #FFB500 95%, 
+    transparent 100%);
+  transform: translateY(-50%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  opacity: 0.6;
+  filter: blur(0.5px);
 }
 
 /* Hero Section Animations */
@@ -84,6 +246,37 @@ select option[value=""] {
   }
   50% {
     transform: translateY(-10px);
+  }
+}
+
+/* Title Icon Floating Animations - Desktop Only */
+@keyframes floatLeft {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  25% {
+    transform: translateY(-8px) translateX(-2px);
+  }
+  50% {
+    transform: translateY(-12px) translateX(0px);
+  }
+  75% {
+    transform: translateY(-8px) translateX(2px);
+  }
+}
+
+@keyframes floatRight {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  25% {
+    transform: translateY(-10px) translateX(2px);
+  }
+  50% {
+    transform: translateY(-14px) translateX(0px);
+  }
+  75% {
+    transform: translateY(-10px) translateX(-2px);
   }
 }
 
@@ -119,5 +312,62 @@ select option[value=""] {
   100% {
     opacity: 0; /* Slowly fade out */
     transform: translateY(0px) scale(0.9);
+  }
+}
+
+/* Title Icon Floating Animations - Desktop Only */
+@media (min-width: 640px) {
+  .icon-float-left {
+    animation: floatLeft 3s ease-in-out infinite;
+    display: inline-block;
+  }
+  
+  .icon-float-right {
+    animation: floatRight 3.5s ease-in-out infinite;
+    display: inline-block;
+  }
+}
+
+/* Mobile touch optimizations */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure minimum touch target sizes on mobile */
+@media (max-width: 640px) {
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+  
+  /* But allow smaller elements where appropriate */
+  .text-xs {
+    min-height: 36px;
+  }
+}
+
+/* Focus states for accessibility */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 transition-shadow;
+  }
+  
+  .focus-ring-inset {
+    @apply focus:outline-none focus:ring-2 focus:ring-inset focus:ring-yellow-400 transition-shadow;
+  }
+  
+  .focus-visible-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 transition-shadow;
+  }
+}
+
+/* Prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -57,12 +57,12 @@ export default function UserDisplayName({
   }
 
   const content = (
-    <>
+    <span className="flex items-center gap-1">
       {showAvatar && (
-        <span className="inline-block mr-1 text-sm">{avatarUrl}</span>
+        <span className="text-sm leading-none">{avatarUrl}</span>
       )}
-      {displayName}
-    </>
+      <span className="leading-none">{displayName}</span>
+    </span>
   )
 
   if (linkToProfile) {

@@ -9,6 +9,10 @@ import dynamic from 'next/dynamic'
 import Comments from '@/components/Comments'
 import LikeButton from '@/components/LikeButton'
 import { reverseGeocode } from '@/lib/geocoding'
+import { Spinner } from '@/components/Spinner'
+import { SkeletonCard } from '@/components/Skeleton'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorMessage } from '@/components/ErrorMessage'
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -87,7 +91,18 @@ export default function MyPawPawsPage() {
   const [commentsByEncounter, setCommentsByEncounter] = useState<Record<string, Comment[]>>({})
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const [selectedEncounter, setSelectedEncounter] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const processedEncounterIds = useRef<Set<string>>(new Set())
+  
+  // Detect mobile on client side
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -153,9 +168,7 @@ export default function MyPawPawsPage() {
         }
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Subscribed to my encounters changes')
-        }
+        // Subscribed to real-time updates
       })
 
     return () => {
@@ -269,8 +282,9 @@ export default function MyPawPawsPage() {
       processedEncounters.forEach(encounter => {
         processedEncounterIds.current.add(encounter.id)
       })
-    } catch (err: any) {
-      setError(err.message || 'Failed to load your encounters')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load your encounters'
+      setError(errorMessage)
       console.error('Error fetching encounters:', err)
     } finally {
       setLoading(false)
@@ -323,11 +337,9 @@ export default function MyPawPawsPage() {
 
   const handleDoubleClickEncounter = (encounter: Encounter) => {
     if (!user || encounter.user_id !== user.id) {
-      console.log('Double-click blocked: user not logged in or not owner', { user: !!user, encounterUserId: encounter.user_id, currentUserId: user?.id })
       return
     }
     // Navigate to upload page with edit query param
-    console.log('Double-click detected, navigating to edit mode:', encounter.id)
     router.push(`/upload?edit=${encounter.id}`)
   }
 
@@ -425,11 +437,10 @@ export default function MyPawPawsPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${month}/${day}/${year}`
   }
 
   const formatCommentDate = (dateString: string) => {
@@ -456,12 +467,12 @@ export default function MyPawPawsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-xl font-medium mb-4" style={{ color: '#5C3D2E' }}>
+          <p className="text-xl font-semibold mb-4" style={{ color: '#5C3D2E' }}>
             Please sign in to view your PawPaws
           </p>
           <Link
             href="/"
-            className="px-6 py-3 text-base font-medium text-white rounded-lg transition-all"
+            className="px-6 py-3 text-base font-semibold text-white rounded-lg transition-all"
             style={{
               background: 'linear-gradient(to right, #FFB500, #FFC845)',
             }}
@@ -476,49 +487,51 @@ export default function MyPawPawsPage() {
   return (
     <main className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 relative z-10">
       <div className="max-w-7xl mx-auto">
+        {/* Back Button - Top Left */}
+        <div className="mb-6">
+          <button
+            onClick={() => router.back()}
+            className="px-4 py-2 text-sm font-semibold rounded-lg transition-colors"
+            style={{ 
+              color: '#5C3D2E',
+              background: 'linear-gradient(to right, #FFEB99, #FFD166)',
+              border: '2px solid #FFC845'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, #FFD166, #FFC845)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to right, #FFEB99, #FFD166)'
+            }}
+            aria-label="Go back"
+          >
+            ← Back
+          </button>
+        </div>
         {/* Header */}
         <div className="mb-12 text-center relative">
-          {/* Top Right Navigation - Back to Home */}
-          <div className="absolute top-0 right-0 flex items-center gap-3 flex-wrap mt-4 mr-4 z-20">
-            <Link
-              href="/"
-              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-              style={{ 
-                color: '#5C3D2E',
-                background: 'linear-gradient(to right, #FFEB99, #FFD166)',
-                border: '2px solid #FFC845'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(to right, #FFD166, #FFC845)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(to right, #FFEB99, #FFD166)'
-              }}
-            >
-              ← Back to Home
-            </Link>
-          </div>
           <div className="flex items-center justify-center gap-4 mb-4">
-            <h1 className="font-fredoka text-4xl sm:text-5xl md:text-6xl font-bold" style={{ 
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold" style={{ 
               color: '#5C3D2E',
               textShadow: '2px 2px 4px rgba(0, 0, 0, 0.1)',
-              fontFamily: 'var(--font-fredoka), sans-serif'
+              fontFamily: 'var(--font-poppins), sans-serif'
             }}>
               🐾 My PawPaws 🐾
             </h1>
           </div>
-          <p className="font-fredoka text-lg sm:text-xl md:text-2xl mb-6 font-medium" style={{
+          <p className="text-lg sm:text-xl md:text-2xl mb-6 font-semibold" style={{
             color: '#5C3D2E',
             textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)',
-            fontFamily: 'var(--font-fredoka), sans-serif'
+            fontFamily: 'var(--font-inter), sans-serif'
           }}>
             Your dog encounters collection
           </p>
           <div className="flex justify-center gap-4">
             <Link
               href="/upload"
-              className="px-6 py-3 text-sm font-fredoka font-semibold text-white rounded-lg transition-all"
+              className="px-6 py-3 text-sm font-semibold text-white rounded-lg transition-all"
               style={{
+                fontFamily: 'var(--font-poppins), sans-serif',
                 background: 'linear-gradient(to right, #FFB500, #FFC845)',
                 boxShadow: '0 10px 25px rgba(255, 181, 0, 0.4)'
               }}
@@ -527,8 +540,9 @@ export default function MyPawPawsPage() {
             </Link>
             <Link
               href={`/profile/${user?.id}`}
-              className="px-6 py-3 text-sm font-fredoka font-semibold text-white rounded-lg transition-all"
+              className="px-6 py-3 text-sm font-semibold text-white rounded-lg transition-all"
               style={{
+                fontFamily: 'var(--font-poppins), sans-serif',
                 background: 'linear-gradient(to right, #8B5CF6, #A78BFA)',
                 boxShadow: '0 10px 25px rgba(139, 92, 246, 0.4)'
               }}
@@ -541,34 +555,49 @@ export default function MyPawPawsPage() {
         {/* Loading State */}
         {loading && (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin text-6xl mb-4">🐕</div>
-            <p className="text-[#5C3D2E] font-medium">Loading your PawPaws...</p>
+            <Spinner size="lg" className="mx-auto mb-4" />
+            <p className="text-[#5C3D2E] font-semibold">Loading your PawPaws...</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8">
+              {[...Array(4)].map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="mb-8">
+            <ErrorMessage
+              message={error}
+              onRetry={() => {
+                setError(null)
+                fetchMyEncounters()
+              }}
+            />
           </div>
         )}
 
         {/* Empty State */}
         {!loading && !error && encounters.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">🐕</div>
-            <p className="text-[#5C3D2E] mb-4 font-medium text-lg">You haven't uploaded any encounters yet.</p>
-            <Link
-              href="/upload"
-              className="px-8 py-4 text-base font-fredoka font-semibold text-white rounded-full transition-all shadow-xl hover:shadow-2xl transform hover:scale-110"
-              style={{
-                background: 'linear-gradient(to right, #FFB500, #FFC845)',
-                boxShadow: '0 10px 25px rgba(255, 181, 0, 0.4)'
-              }}
-            >
-              📸 Upload Your First PawPaw! 🎉
-            </Link>
-          </div>
+          <EmptyState
+            icon="🐾"
+            title="No encounters yet"
+            description="Start sharing your PawPaw encounters with the community!"
+            action={
+              <Link
+                href="/upload"
+                className="px-8 py-4 text-base font-semibold text-white rounded-full transition-all shadow-xl hover:shadow-2xl transform hover:scale-110 focus-visible-ring"
+                style={{
+                  fontFamily: 'var(--font-poppins), sans-serif',
+                  background: 'linear-gradient(to right, #FFB500, #FFC845)',
+                  boxShadow: '0 10px 25px rgba(255, 181, 0, 0.4)'
+                }}
+              >
+                📸 Upload Your First PawPaw! 🎉
+              </Link>
+            }
+          />
         )}
 
         {/* Grid of Encounters */}
@@ -583,7 +612,12 @@ export default function MyPawPawsPage() {
                 const encounterComments = commentsByEncounter[encounter.id] || []
                 const commentCount = commentCounts[encounter.id] || 0
                 const isExpanded = selectedEncounter === encounter.id
-                const commentsToShow = isExpanded ? encounterComments : encounterComments.slice(0, 2)
+                // On mobile, hide comments by default. On desktop, show first 2
+                const commentsToShow = isExpanded 
+                  ? encounterComments 
+                  : isMobile 
+                    ? [] 
+                    : encounterComments.slice(0, 2)
                 
                 return (
                   <div
@@ -636,19 +670,19 @@ export default function MyPawPawsPage() {
                       {/* Tags with Emojis */}
                       <div className="flex flex-wrap gap-2 mb-4">
                         {encounter.breed && (
-                          <span className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 rounded-full flex items-center gap-1">
+                          <span className="px-3 py-1.5 text-sm font-semibold bg-yellow-100 text-yellow-900 rounded-full flex items-center gap-1">
                             <span>{getTagEmoji(encounter.breed, 'breed')}</span>
                             {encounter.breed}
                           </span>
                         )}
                         {encounter.size && (
-                          <span className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 rounded-full flex items-center gap-1">
+                          <span className="px-3 py-1.5 text-sm font-semibold bg-blue-100 text-blue-900 rounded-full flex items-center gap-1">
                             <span>{getTagEmoji(encounter.size, 'size')}</span>
                             {encounter.size}
                           </span>
                         )}
                         {encounter.mood && (
-                          <span className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-green-100 to-green-200 text-green-800 rounded-full flex items-center gap-1">
+                          <span className="px-3 py-1.5 text-sm font-semibold bg-green-100 text-green-900 rounded-full flex items-center gap-1">
                             <span>{getTagEmoji(encounter.mood, 'mood')}</span>
                             {encounter.mood}
                           </span>
@@ -660,7 +694,7 @@ export default function MyPawPawsPage() {
                         {location && (
                           <div className="flex items-center gap-1">
                             <span>📍</span>
-                            <span className="truncate font-medium">{getLocationName(encounter)}</span>
+                            <span className="truncate font-semibold">{getLocationName(encounter)}</span>
                           </div>
                         )}
                         {location && (
@@ -681,21 +715,21 @@ export default function MyPawPawsPage() {
                         />
                         <button
                           onClick={() => {
-                            if (commentCount > 2) {
+                            if (commentCount > 0) {
                               setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)
                             }
                           }}
-                          className={`flex items-center gap-1 text-sm font-medium transition-colors ${
-                            commentCount > 2 ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                          className={`flex items-center gap-1 text-sm font-semibold transition-colors ${
+                            commentCount > 0 ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
                           }`}
                           style={{ color: '#5C3D2E' }}
                           onMouseEnter={(e) => {
-                            if (commentCount > 2) {
+                            if (commentCount > 0) {
                               e.currentTarget.style.color = '#FFB500'
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (commentCount > 2) {
+                            if (commentCount > 0) {
                               e.currentTarget.style.color = '#5C3D2E'
                             }
                           }}
@@ -707,7 +741,7 @@ export default function MyPawPawsPage() {
                         </button>
                       </div>
 
-                      {/* Comments Preview (first 2, or all if expanded) */}
+                      {/* Comments Preview (hidden on mobile by default, first 2 on desktop, or all if expanded) */}
                       {commentsToShow.length > 0 && (
                         <div className="mb-3 pt-3 border-t border-gray-200">
                           <div className="space-y-2">
@@ -715,7 +749,7 @@ export default function MyPawPawsPage() {
                               <div key={comment.id} className="p-2 bg-gray-50 rounded-md">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1">
-                                    <p className="text-sm font-medium" style={{ color: '#5C3D2E' }}>
+                                    <p className="text-sm font-semibold" style={{ color: '#5C3D2E' }}>
                                       {comment.comment}
                                     </p>
                                     <p className="text-xs mt-1" style={{ color: '#5C3D2E', opacity: 0.6 }}>
@@ -758,11 +792,11 @@ export default function MyPawPawsPage() {
                         </div>
                       )}
 
-                      {/* View All / Show Less Comments Button */}
-                      {commentCount > 2 && (
+                      {/* View All / Show Less Comments Button - Hidden on mobile */}
+                      {commentCount >= 3 && !isMobile && (
                         <button
                           onClick={() => setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)}
-                          className="w-full mt-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors border-2"
+                          className="w-full mt-2 px-3 py-2 text-sm font-semibold rounded-lg transition-colors border-2"
                           style={{ 
                             color: '#5C3D2E',
                             borderColor: '#FFC845',
@@ -777,7 +811,10 @@ export default function MyPawPawsPage() {
                             e.currentTarget.style.borderColor = '#FFC845'
                           }}
                         >
-                          {isExpanded ? 'Show less' : `View all ${commentCount} comments`}
+                          {isExpanded 
+                            ? 'Show less' 
+                            : `View all ${commentCount} comments`
+                          }
                         </button>
                       )}
                     </div>

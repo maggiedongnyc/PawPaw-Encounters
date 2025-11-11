@@ -16,12 +16,18 @@ export default function BadgePopup({ badge, onClose }: BadgePopupProps) {
 
   useEffect(() => {
     if (badge) {
-      setIsVisible(true)
-      const timer = setTimeout(() => {
-        setIsVisible(false)
-        setTimeout(onClose, 500)
-      }, 3000)
-      return () => clearTimeout(timer)
+      // Defer setState to avoid synchronous state update warning
+      let timer: NodeJS.Timeout | null = null
+      setTimeout(() => {
+        setIsVisible(true)
+        timer = setTimeout(() => {
+          setIsVisible(false)
+          setTimeout(onClose, 500)
+        }, 3000)
+      }, 0)
+      return () => {
+        if (timer) clearTimeout(timer)
+      }
     }
   }, [badge, onClose])
 

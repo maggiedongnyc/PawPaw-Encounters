@@ -1,12 +1,15 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 
 export default function Background() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    // Defer setState to avoid synchronous state update warning
+    setTimeout(() => {
+      setMounted(true)
+    }, 0)
   }, [])
 
   // Helper function to generate points along a diagonal path
@@ -75,7 +78,7 @@ export default function Background() {
       points: generateDiagonalPath(
         { x: 3, y: 30 },
         { x: 25, y: 85 }, // Stay on left edge
-        6
+        4
       )
     },
     // Path 2: Top-right corner to bottom-left corner (edge path)
@@ -84,7 +87,7 @@ export default function Background() {
       points: generateSCurvePath(
         { x: 97, y: 28 },
         { x: 3, y: 82 }, // Stay on edges
-        6
+        4
       )
     },
     // Path 3: Bottom-left corner to top-right corner (edge path)
@@ -93,7 +96,7 @@ export default function Background() {
       points: generateArcPath(
         { x: 3, y: 80 },
         { x: 97, y: 32 }, // Stay on edges
-        6,
+        4,
         20
       )
     },
@@ -103,7 +106,7 @@ export default function Background() {
       points: generateDiagonalPath(
         { x: 75, y: 30 }, // Start from right edge
         { x: 97, y: 88 }, // Stay on right edge
-        5
+        3
       )
     },
     // Path 5: Top-left corner horizontal path
@@ -112,7 +115,7 @@ export default function Background() {
       points: generateDiagonalPath(
         { x: 3, y: 30 },
         { x: 20, y: 32 }, // Stay on left edge
-        4
+        3
       )
     },
     // Path 6: Top-right corner horizontal path
@@ -121,7 +124,7 @@ export default function Background() {
       points: generateDiagonalPath(
         { x: 80, y: 30 },
         { x: 97, y: 32 }, // Stay on right edge
-        4
+        3
       )
     },
     // Path 7: Bottom-left corner horizontal path
@@ -130,7 +133,7 @@ export default function Background() {
       points: generateDiagonalPath(
         { x: 3, y: 85 },
         { x: 20, y: 88 }, // Stay on left edge
-        4
+        3
       )
     },
     // Path 8: Bottom-right corner horizontal path
@@ -139,7 +142,7 @@ export default function Background() {
       points: generateDiagonalPath(
         { x: 80, y: 85 },
         { x: 97, y: 88 }, // Stay on right edge
-        4
+        3
       )
     }
   ]
@@ -161,11 +164,15 @@ export default function Background() {
     }> = []
 
     // Use a seeded random function for consistent results across server/client
-    let seed = 12345 // Fixed seed for consistency
-    const seededRandom = () => {
-      seed = (seed * 9301 + 49297) % 233280
-      return seed / 233280
+    // Use a closure to maintain seed state without reassignment
+    const createSeededRandom = (initialSeed: number) => {
+      let seed = initialSeed
+      return () => {
+        seed = (seed * 9301 + 49297) % 233280
+        return seed / 233280
+      }
     }
+    const seededRandom = createSeededRandom(12345)
 
     paths.forEach((path) => {
       path.points.forEach((point, idx) => {
@@ -180,17 +187,17 @@ export default function Background() {
           left: point.x + (seededRandom() - 0.5) * 3, // Small random offset
           top: point.y + (seededRandom() - 0.5) * 3,
           size: getRandomSize(seededRandom),
-          rotation: baseRotation + (seededRandom() - 0.5) * 10, // ±5° variation
+          rotation: baseRotation + (seededRandom() - 0.5) * 30, // ±15° variation (MORE ROTATION!)
           delay: seededRandom() * 5, // Stagger fade-in over 0-5 seconds
-          duration: seededRandom() * 9 + 12, // 12-21 seconds for float (3x slower)
-          opacity: seededRandom() * 0.2 + 0.3, // 0.3-0.5 opacity
+          duration: seededRandom() * 6 + 8, // 8-14 seconds for faster bounce
+          opacity: seededRandom() * 0.15 + 0.25, // 0.25-0.4 opacity (slightly more visible)
           startOffset: seededRandom(), // Where in float cycle to start
         })
       })
     })
 
-    // Add some scattered prints to fill gaps naturally (10% of total) - only edges and corners
-    const scatteredCount = Math.floor(prints.length * 0.1)
+    // Add some scattered prints to fill gaps naturally (5% of total) - only edges and corners
+    const scatteredCount = Math.floor(prints.length * 0.05)
     for (let i = 0; i < scatteredCount; i++) {
       // Only edges and corners - completely avoid center (25-75% horizontally, 25-75% vertically)
       let left, top
@@ -216,8 +223,8 @@ export default function Background() {
         size: getRandomSize(seededRandom),
         rotation: seededRandom() * 360,
         delay: seededRandom() * 5,
-        duration: seededRandom() * 9 + 12, // 12-21 seconds for float (3x slower)
-        opacity: seededRandom() * 0.2 + 0.3,
+        duration: seededRandom() * 6 + 8, // 8-14 seconds for faster bounce
+        opacity: seededRandom() * 0.15 + 0.25, // 0.25-0.4 opacity (slightly more visible)
         startOffset: seededRandom(),
       })
     }
@@ -229,11 +236,42 @@ export default function Background() {
 
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-      {/* Base Gradient Layer */}
+      {/* Cork Board Base - Community Bulletin Board Feel */}
       <div 
         className="absolute inset-0"
         style={{
-          background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 20%, #DBEAFE 60%, #BFDBFE 100%)',
+          background: '#E5D4C1',
+        }}
+      />
+      
+      {/* Cork Texture - Fine grain and organic variation */}
+      <div 
+        className="absolute inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse at 20% 30%, rgba(217, 200, 181, 0.4) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 70%, rgba(232, 215, 196, 0.4) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(209, 196, 177, 0.3) 0%, transparent 40%),
+            radial-gradient(ellipse at 70% 20%, rgba(225, 212, 193, 0.3) 0%, transparent 40%)
+          `,
+        }}
+      />
+      
+      {/* Cork Grain Texture */}
+      <div 
+        className="absolute inset-0 opacity-40 mix-blend-multiply"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='corkNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' seed='1' /%3E%3CfeColorMatrix values='0 0 0 0 0.82, 0 0 0 0 0.77, 0 0 0 0 0.69, 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23corkNoise)' opacity='0.15'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
+        }}
+      />
+      
+      {/* Subtle darker spots (like cork natural texture) */}
+      <div 
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='10' cy='15' r='1' fill='%238B7355' opacity='0.3'/%3E%3Ccircle cx='45' cy='30' r='1.5' fill='%238B7355' opacity='0.2'/%3E%3Ccircle cx='70' cy='55' r='1' fill='%238B7355' opacity='0.25'/%3E%3Ccircle cx='25' cy='75' r='1.2' fill='%238B7355' opacity='0.3'/%3E%3Ccircle cx='85' cy='20' r='0.8' fill='%238B7355' opacity='0.2'/%3E%3Ccircle cx='60' cy='85' r='1' fill='%238B7355' opacity='0.25'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
         }}
       />
 

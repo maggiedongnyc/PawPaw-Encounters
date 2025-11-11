@@ -18,7 +18,10 @@ export default function Confetti({ trigger }: ConfettiProps) {
         delay: Math.random() * 0.5,
         color: colors[Math.floor(Math.random() * colors.length)],
       }))
-      setConfetti(newConfetti)
+      // Defer setState to avoid synchronous state update warning
+      setTimeout(() => {
+        setConfetti(newConfetti)
+      }, 0)
 
       setTimeout(() => {
         setConfetti([])

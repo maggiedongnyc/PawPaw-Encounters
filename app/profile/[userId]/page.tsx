@@ -313,7 +313,7 @@ export default function ProfilePage() {
               {isEditing ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Username</label>
+                    <label className="block text-sm font-semibold mb-1">Username</label>
                     <input
                       type="text"
                       value={editForm.username}
@@ -323,7 +323,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Display Name</label>
+                    <label className="block text-sm font-semibold mb-1">Display Name</label>
                     <input
                       type="text"
                       value={editForm.display_name}
@@ -333,7 +333,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Bio</label>
+                    <label className="block text-sm font-semibold mb-1">Bio</label>
                     <textarea
                       value={editForm.bio}
                       onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
@@ -343,7 +343,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Location</label>
+                    <label className="block text-sm font-semibold mb-1">Location</label>
                     <input
                       type="text"
                       value={editForm.location}
@@ -353,7 +353,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Website</label>
+                    <label className="block text-sm font-semibold mb-1">Website</label>
                     <input
                       type="url"
                       value={editForm.website}
@@ -396,7 +396,7 @@ export default function ProfilePage() {
                     {displayName}
                   </h1>
                   {profile.username && (
-                    <p className="text-gray-500 mb-2">@{profile.username}</p>
+                    <p className="text-gray-600 mb-2">@{profile.username}</p>
                   )}
                   {profile.bio && (
                     <p className="text-gray-700 mb-2">{profile.bio}</p>
@@ -460,7 +460,7 @@ export default function ProfilePage() {
           {/* Favorite Breeds */}
           {profile.favorite_breeds && profile.favorite_breeds.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-200">
-              <p className="text-sm font-medium mb-2" style={{ color: '#5C3D2E' }}>
+              <p className="text-sm font-semibold mb-2" style={{ color: '#5C3D2E' }}>
                 Favorite Breeds:
               </p>
               <div className="flex flex-wrap gap-2">
@@ -506,7 +506,7 @@ export default function ProfilePage() {
                     <p className="text-sm text-gray-700 line-clamp-2 mb-2">
                       {encounter.description}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
                       <span>❤️ {encounter.likes}</span>
                       <span>•</span>
                       <span>{getLocationName(encounter)}</span>

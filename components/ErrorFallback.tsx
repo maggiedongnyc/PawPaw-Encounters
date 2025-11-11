@@ -26,7 +26,7 @@ export default function ErrorFallback({ error, resetErrorBoundary }: ErrorFallba
         </button>
         {process.env.NODE_ENV === 'development' && (
           <details className="mt-6 text-left">
-            <summary className="text-sm text-gray-500 cursor-pointer mb-2">
+            <summary className="text-sm text-gray-600 cursor-pointer mb-2">
               Error Details (Development Only)
             </summary>
             <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto max-h-40">

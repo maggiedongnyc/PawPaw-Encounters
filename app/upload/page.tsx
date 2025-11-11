@@ -21,6 +21,19 @@ interface LocationData {
   name?: string
 }
 
+interface Encounter {
+  id: string
+  photo_url: string
+  description: string
+  location: string | LocationData
+  breed?: string | null
+  size?: string | null
+  mood?: string | null
+  likes: number
+  created_at: string
+  user_id?: string | null
+}
+
 type Step = 1 | 2 | 3 | 4
 
 function UploadPageContent() {
@@ -48,8 +61,12 @@ function UploadPageContent() {
   const [showPawTrail, setShowPawTrail] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false) // Track if submission is in progress
   const [isEditMode, setIsEditMode] = useState(false) // Track if we're editing an existing encounter
-  const [existingEncounter, setExistingEncounter] = useState<any>(null) // Store existing encounter data
+  const [existingEncounter, setExistingEncounter] = useState<Encounter | null>(null) // Store existing encounter data
   const [countdown, setCountdown] = useState<number | null>(null) // Countdown for redirect in edit mode
+  const [isQuickAdd, setIsQuickAdd] = useState(false) // Track if this is a quick add from map
+  const [originalEncounter, setOriginalEncounter] = useState<Encounter | null>(null) // Store original encounter for clone context
+  const [latitude, setLatitude] = useState('')
+  const [longitude, setLongitude] = useState('')
 
   // Form auto-save to localStorage
   const STORAGE_KEY = 'pawpaw-upload-draft'
@@ -79,9 +96,53 @@ function UploadPageContent() {
     }
   }, [description, breed, size, mood, location, locationMethod, currentStep, isEditMode])
 
+  // Check for quick add or clone from map
+  useEffect(() => {
+    const cloneId = sessionStorage.getItem('cloneEncounter')
+    const quickLocation = sessionStorage.getItem('quickAddLocation')
+    
+    if (quickLocation) {
+      try {
+        const loc = JSON.parse(quickLocation)
+        setLatitude(loc.lat.toString())
+        setLongitude(loc.lng.toString())
+        
+        // Set location object
+        setLocation({
+          lat: loc.lat,
+          lng: loc.lng,
+          name: loc.address || undefined
+        })
+        setLocationMethod('map')
+        
+        // If there's also a clone ID, this is a "Me Too" action
+        if (cloneId) {
+          setIsQuickAdd(true)
+          setDescription('Spotted another dog here!')
+          
+          // Fetch original encounter for context
+          supabase
+            .from('Encounters')
+            .select('*')
+            .eq('id', cloneId)
+            .single()
+            .then(({ data }) => {
+              if (data) setOriginalEncounter(data)
+            })
+        }
+        
+        // Clear from storage
+        sessionStorage.removeItem('cloneEncounter')
+        sessionStorage.removeItem('quickAddLocation')
+      } catch (error) {
+        console.error('Error parsing quick location:', error)
+      }
+    }
+  }, [])
+
   // Load draft data from localStorage on mount
   useEffect(() => {
-    if (isEditMode || !user) return // Don't load draft in edit mode or if not logged in
+    if (isEditMode || !user || isQuickAdd) return // Don't load draft in edit mode, if not logged in, or if quick add
     
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -349,7 +410,6 @@ function UploadPageContent() {
     
     // Prevent double submission
     if (isSubmitting || isUploading || success) {
-      console.log('Submission already in progress or completed, ignoring duplicate submit')
       return
     }
 
@@ -481,8 +541,9 @@ function UploadPageContent() {
           router.push('/')
         }, 3000)
       }
-    } catch (err: any) {
-      setError(err.message || (isEditMode ? 'An error occurred while updating' : 'An error occurred while uploading'))
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : (isEditMode ? 'An error occurred while updating' : 'An error occurred while uploading')
+      setError(errorMessage)
       console.error(isEditMode ? 'Update error:' : 'Upload error:', err)
       // Clear submission flag on error so user can retry
       setIsSubmitting(false)
@@ -550,19 +611,46 @@ function UploadPageContent() {
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-4xl font-bold" style={{ color: '#5C3D2E' }}>
-              {isEditMode ? 'Edit Doggo Encounter' : 'Upload Doggo Encounter'}
+              {isEditMode ? 'Edit Paw Encounter' : 'Upload Paw Encounter'}
             </h1>
             <Link
               href="/"
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
               Cancel
             </Link>
           </div>
-          <p className="text-lg font-medium" style={{ color: '#5C3D2E' }}>
+          <p className="text-lg font-semibold" style={{ color: '#5C3D2E' }}>
             {isEditMode ? 'Update your dog encounter details' : 'Share your dog encounter with the community'}
           </p>
         </div>
+
+        {/* Quick Add Banner */}
+        {isQuickAdd && originalEncounter && (
+          <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-2xl">
+            <div className="flex items-start gap-3">
+              <span className="text-3xl">✨</span>
+              <div className="flex-1">
+                <h3 className="font-bold text-green-900 mb-1">
+                  Adding at the same spot!
+                </h3>
+                <p className="text-sm text-green-700 mb-3">
+                  You&apos;re adding your dog where someone found:
+                </p>
+                <div className="flex items-center gap-2 p-2 bg-white rounded-lg">
+                  <img 
+                    src={originalEncounter.photo_url} 
+                    alt="" 
+                    className="w-12 h-12 object-cover rounded"
+                  />
+                  <span className="text-sm font-semibold text-gray-900">
+                    {originalEncounter.description}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Progress Steps */}
         <div className="mb-8 bg-white rounded-xl shadow-md p-6">
@@ -580,12 +668,12 @@ function UploadPageContent() {
                     {currentStep > step.number ? '✓' : step.number}
                   </div>
                   <div className="mt-2 text-center">
-                    <p className={`text-sm font-medium ${
-                      currentStep >= step.number ? 'text-[#3B82F6]' : 'text-gray-500'
+                    <p className={`text-sm font-semibold ${
+                      currentStep >= step.number ? 'text-[#3B82F6]' : 'text-gray-600'
                     }`}>
                       {step.title}
                     </p>
-                    <p className="text-xs text-gray-500 hidden sm:block">
+                    <p className="text-xs text-gray-600 hidden sm:block">
                       {step.description}
                     </p>
                   </div>
@@ -642,17 +730,17 @@ function UploadPageContent() {
                 <div>
                   <label
                     htmlFor="photo"
-                    className="block text-sm font-medium text-gray-700 mb-3"
+                    className="block text-sm font-semibold text-gray-700 mb-3"
                   >
                     Photo {!isEditMode && <span className="text-red-500">*</span>}
-                    {isEditMode && <span className="text-gray-500 text-xs ml-2">(Optional - leave empty to keep current photo)</span>}
+                    {isEditMode && <span className="text-gray-600 text-xs ml-2">(Optional - leave empty to keep current photo)</span>}
                   </label>
                   <input
                     type="file"
                     id="photo"
                     accept="image/*"
                     onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-500
+                    className="block w-full text-sm text-gray-600
                       file:mr-4 file:py-3 file:px-6
                       file:rounded-md file:border-0
                       file:text-sm file:font-semibold
@@ -666,7 +754,7 @@ function UploadPageContent() {
                 {/* Photo Preview */}
                 {previewUrl && (
                   <div className="mt-6">
-                    <p className="text-sm font-medium text-gray-700 mb-3">Preview:</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Preview:</p>
                     <div className="relative w-full h-80 rounded-lg overflow-hidden border-2 border-gray-200 shadow-md">
                       <img
                         src={previewUrl}
@@ -694,7 +782,7 @@ function UploadPageContent() {
                 <div>
                   <label
                     htmlFor="description"
-                    className="block text-sm font-medium text-gray-700 mb-3"
+                    className="block text-sm font-semibold text-gray-700 mb-3"
                   >
                     Description <span className="text-red-500">*</span>
                   </label>
@@ -704,10 +792,10 @@ function UploadPageContent() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
-                      focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
+                      focus:border-yellow-400 focus-ring-inset
                       disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
                       placeholder:text-gray-700"
-                    placeholder="Describe your doggo encounter..."
+                    placeholder="Describe your paw encounter..."
                     disabled={isUploading}
                     style={{ '--tw-placeholder-opacity': '1' } as React.CSSProperties}
                   />
@@ -718,7 +806,7 @@ function UploadPageContent() {
                   <div>
                     <label
                       htmlFor="breed"
-                      className="block text-sm font-medium text-gray-700 mb-3"
+                      className="block text-sm font-semibold text-gray-700 mb-3"
                     >
                       Breed (Optional)
                     </label>
@@ -728,7 +816,7 @@ function UploadPageContent() {
                       value={breed}
                       onChange={(e) => setBreed(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
-                        focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
+                        focus:border-yellow-400 focus-ring-inset
                         disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
                         placeholder:text-gray-700"
                       placeholder="e.g., Golden Retriever"
@@ -740,7 +828,7 @@ function UploadPageContent() {
                   <div>
                     <label
                       htmlFor="size"
-                      className="block text-sm font-medium text-gray-700 mb-3"
+                      className="block text-sm font-semibold text-gray-700 mb-3"
                     >
                       Size (Optional)
                     </label>
@@ -749,7 +837,7 @@ function UploadPageContent() {
                       value={size}
                       onChange={(e) => setSize(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
-                        focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
+                        focus:border-yellow-400 focus-ring-inset
                         disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
                         text-gray-700"
                       disabled={isUploading}
@@ -766,7 +854,7 @@ function UploadPageContent() {
                   <div>
                     <label
                       htmlFor="mood"
-                      className="block text-sm font-medium text-gray-700 mb-3"
+                      className="block text-sm font-semibold text-gray-700 mb-3"
                     >
                       Mood (Optional)
                     </label>
@@ -775,7 +863,7 @@ function UploadPageContent() {
                       value={mood}
                       onChange={(e) => setMood(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
-                        focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
+                        focus:border-yellow-400 focus-ring-inset
                         disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
                         text-gray-700"
                       disabled={isUploading}
@@ -811,8 +899,8 @@ function UploadPageContent() {
                     type="button"
                     onClick={handleUseCurrentLocation}
                     disabled={isUploading || isGettingLocation}
-                    className="flex-1 px-6 py-3 text-sm font-medium text-[#3B82F6] bg-blue-50 border-2 border-[#3B82F6] rounded-md
-                      hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:ring-offset-2
+                    className="flex-1 px-6 py-3 text-sm font-semibold text-[#3B82F6] bg-blue-50 border-2 border-[#3B82F6] rounded-md
+                      hover:bg-blue-100 focus-visible-ring
                       disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-300 disabled:cursor-not-allowed
                       transition-colors"
                   >
@@ -823,8 +911,8 @@ function UploadPageContent() {
                     type="button"
                     onClick={() => setLocationMethod(locationMethod === 'map' ? 'none' : 'map')}
                     disabled={isUploading}
-                    className={`flex-1 px-6 py-3 text-sm font-medium rounded-md
-                      focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:ring-offset-2
+                    className={`flex-1 px-6 py-3 text-sm font-semibold rounded-md
+                      focus-visible-ring
                       disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed
                       transition-colors ${
                         locationMethod === 'map'
@@ -861,7 +949,7 @@ function UploadPageContent() {
                               Finding neighborhood name...
                             </p>
                           ) : (
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-sm font-semibold text-gray-900">
                               📍 {location.name}
                             </p>
                           )}
@@ -921,17 +1009,17 @@ function UploadPageContent() {
                       <h3 className="text-sm font-semibold text-gray-700 mb-3">Tags</h3>
                       <div className="flex flex-wrap gap-2">
                         {breed && (
-                          <span className="px-3 py-1.5 text-sm font-medium bg-blue-100 text-blue-800 rounded-full">
+                          <span className="px-3 py-1.5 text-sm font-semibold bg-blue-100 text-blue-800 rounded-full">
                             {breed}
                           </span>
                         )}
                         {size && (
-                          <span className="px-3 py-1.5 text-sm font-medium bg-green-100 text-green-800 rounded-full">
+                          <span className="px-3 py-1.5 text-sm font-semibold bg-green-100 text-green-800 rounded-full">
                             {size}
                           </span>
                         )}
                         {mood && (
-                          <span className="px-3 py-1.5 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">
+                          <span className="px-3 py-1.5 text-sm font-semibold bg-purple-100 text-purple-800 rounded-full">
                             {mood}
                           </span>
                         )}
@@ -957,7 +1045,7 @@ function UploadPageContent() {
                   type="button"
                   onClick={prevStep}
                   disabled={currentStep === 1 || isUploading}
-                  className="px-6 py-3 text-sm font-medium text-[#6B7280] bg-white border-2 border-gray-300 rounded-md
+                  className="px-6 py-3 text-sm font-semibold text-[#6B7280] bg-white border-2 border-gray-300 rounded-md
                     hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:ring-offset-2
                     disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed
                     transition-colors"
@@ -970,7 +1058,7 @@ function UploadPageContent() {
                     type="button"
                     onClick={nextStep}
                     disabled={!canProceed() || isUploading}
-                    className="px-6 py-3 text-sm font-medium text-white bg-[#3B82F6] rounded-md
+                    className="px-6 py-3 text-sm font-semibold text-white bg-[#3B82F6] rounded-md
                       hover:bg-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:ring-offset-2
                       disabled:bg-gray-400 disabled:cursor-not-allowed
                       transition-colors"
@@ -987,7 +1075,7 @@ function UploadPageContent() {
                           ? false
                           : (isUploading || isSubmitting || success || (!isEditMode && !file) || !description.trim() || !location)
                       }
-                      className="px-6 py-3 text-sm font-medium text-white bg-[#10B981] rounded-md
+                      className="px-6 py-3 text-sm font-semibold text-white bg-[#10B981] rounded-md
                         hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2
                         disabled:bg-gray-400 disabled:cursor-not-allowed
                         transition-colors"

@@ -21,7 +21,7 @@ export default function AuthLoader({ children }: AuthLoaderProps) {
       <div className="flex items-center justify-center h-screen text-xl font-bold" style={{ color: '#FFB500' }}>
         <div className="text-center">
           <div className="text-6xl mb-4 animate-bounce">🐾</div>
-          <p className="font-fredoka" style={{ fontFamily: 'var(--font-fredoka), sans-serif' }}>
+          <p style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
             Loading your PawPaw experience… 🐕
           </p>
         </div>

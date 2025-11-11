@@ -23,7 +23,6 @@ export default function NotificationBell() {
 
     try {
       const count = await getUnreadNotificationCount(user.id)
-      console.log('Notification unread count:', count, 'for user:', user.id)
       setUnreadCount(count)
     } catch (error) {
       console.error('Error fetching unread count:', error)
@@ -55,8 +54,6 @@ export default function NotificationBell() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          console.log('New notification received via real-time:', payload)
-          console.log('Notification data:', payload.new)
           // Refresh unread count when new notification arrives
           fetchUnreadCount()
         }
@@ -70,18 +67,16 @@ export default function NotificationBell() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          console.log('Notification updated via real-time:', payload)
           // Refresh unread count when notification is marked as read
           fetchUnreadCount()
         }
       )
       .subscribe((status, err) => {
-        console.log('Notification subscription status:', status)
         if (err) {
           console.error('Notification subscription error:', err)
         }
         if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to notifications for user:', user.id)
+          // Successfully subscribed
         } else if (status === 'CLOSED') {
           console.warn('Notification subscription closed. Attempting to resubscribe...')
           // Try to resubscribe after a delay
@@ -123,14 +118,14 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative flex items-center justify-center" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-700 hover:text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full"
+        className="relative p-0 text-gray-600 hover:text-gray-900 transition-colors focus-visible-ring rounded-full touch-manipulation"
         aria-label="Notifications"
       >
         <svg
-          className="w-6 h-6"
+          className="w-5 h-5 flex-shrink-0"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -143,7 +138,7 @@ export default function NotificationBell() {
           />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full">
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full min-w-[18px]">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}

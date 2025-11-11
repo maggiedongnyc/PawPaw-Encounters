@@ -76,8 +76,9 @@ export default function SignIn({ onSuccess }: SignInProps) {
         setMessage(`SMS sent to ${phone}! Check your phone for the verification code.`)
         setLoading(false)
       }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
       setLoading(false)
     }
   }
@@ -86,10 +87,13 @@ export default function SignIn({ onSuccess }: SignInProps) {
     <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 relative z-10">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h1 className="font-fredoka text-4xl sm:text-5xl font-bold mb-2" style={{ color: '#5C3D2E' }}>
+          <h1 className="text-4xl sm:text-5xl font-bold mb-2" style={{ 
+            color: '#5C3D2E',
+            fontFamily: 'var(--font-poppins), sans-serif'
+          }}>
             🐕 PawPaw Encounters
           </h1>
-          <p className="text-lg font-medium" style={{ color: '#5C3D2E' }}>
+          <p className="text-lg font-semibold" style={{ color: '#5C3D2E' }}>
             Sign in to share your dog encounters
           </p>
         </div>
@@ -105,7 +109,7 @@ export default function SignIn({ onSuccess }: SignInProps) {
                 setSuccess(false)
                 setMessage(null)
               }}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
                 method === 'email'
                   ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -121,7 +125,7 @@ export default function SignIn({ onSuccess }: SignInProps) {
                 setSuccess(false)
                 setMessage(null)
               }}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
                 method === 'phone'
                   ? 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -134,7 +138,7 @@ export default function SignIn({ onSuccess }: SignInProps) {
           <form onSubmit={handleSubmit} className="space-y-4">
             {method === 'email' ? (
               <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: '#5C3D2E' }}>
+                <label htmlFor="email" className="block text-sm font-semibold mb-2" style={{ color: '#5C3D2E' }}>
                   Email Address
                 </label>
                 <input
@@ -150,7 +154,7 @@ export default function SignIn({ onSuccess }: SignInProps) {
               </div>
             ) : (
               <div>
-                <label htmlFor="phone" className="block text-sm font-medium mb-2" style={{ color: '#5C3D2E' }}>
+                <label htmlFor="phone" className="block text-sm font-semibold mb-2" style={{ color: '#5C3D2E' }}>
                   Phone Number
                 </label>
                 <input
@@ -163,7 +167,7 @@ export default function SignIn({ onSuccess }: SignInProps) {
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all"
                   disabled={loading || success}
                 />
-                <p className="mt-1 text-xs text-gray-500">Include country code (e.g., +1 for US)</p>
+                <p className="mt-1 text-xs text-gray-600">Include country code (e.g., +1 for US)</p>
               </div>
             )}
 
@@ -175,11 +179,28 @@ export default function SignIn({ onSuccess }: SignInProps) {
 
             {success && message && (
               <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
-                <p className="text-sm text-green-800 font-medium">{message}</p>
+                <p className="text-sm text-green-800 font-semibold">{message}</p>
                 {method === 'email' && (
-                  <p className="text-xs text-green-700 mt-2">
-                    Click the link in your email to complete sign-in. The link will open in this browser.
-                  </p>
+                  <div className="text-xs text-green-700 mt-2 space-y-1">
+                    <p>Click the link in your email to complete sign-in.</p>
+                    {typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                      <div className="font-semibold mt-2 text-green-900 space-y-1">
+                        <p>📱 <strong>Important for Mobile:</strong></p>
+                        <p>You're currently accessing via localhost. On mobile devices, you need to:</p>
+                        <ol className="list-decimal list-inside ml-2 space-y-1">
+                          <li>Access the app via: <code className="bg-green-100 px-1 rounded font-mono">http://192.168.4.22:3000</code></li>
+                          <li>Request the magic link again from that URL</li>
+                        </ol>
+                        <p className="mt-2">The magic link will then redirect to your IP address, which works on mobile.</p>
+                        <p className="mt-1 text-xs text-green-800">💡 Also check your Supabase Dashboard → Authentication → URL Configuration and make sure <code className="bg-green-100 px-1 rounded">http://192.168.4.22:3000/**</code> is in the Redirect URLs list.</p>
+                      </div>
+                    )}
+                    {typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (
+                      <p className="text-green-800 mt-1">
+                        The magic link will redirect to: <code className="bg-green-100 px-1 rounded">{window.location.origin}/auth/callback</code>
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -187,8 +208,9 @@ export default function SignIn({ onSuccess }: SignInProps) {
             <button
               type="submit"
               disabled={loading || success}
-              className="w-full px-6 py-3 text-base font-fredoka font-semibold text-white rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full px-6 py-3 text-base font-semibold text-white rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               style={{
+                fontFamily: 'var(--font-poppins), sans-serif',
                 background: loading || success
                   ? 'linear-gradient(to right, #9CA3AF, #6B7280)'
                   : 'linear-gradient(to right, #FFB500, #FFC845)',

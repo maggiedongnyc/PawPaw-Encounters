@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { getUserProfile, getDisplayName, getAvatarUrl } from '@/lib/profiles'
+import { Spinner } from './Spinner'
+import { EmptyState } from './EmptyState'
 
 interface LeaderboardEntry {
   user_id: string
@@ -161,15 +163,12 @@ export default function Leaderboard() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-yellow-200">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold flex items-center gap-2">
-          🏆 Leaderboard
-        </h3>
-        <div className="flex gap-2">
+    <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6 border-0 sm:border-2 sm:border-yellow-200">
+      <div className="flex justify-between items-center mb-2 sm:mb-4">
+        <div className="flex gap-1.5 sm:gap-2">
           <button
             onClick={() => setSortBy('uploads')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all transform hover:scale-105 ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all transform hover:scale-105 ${
               sortBy === 'uploads'
                 ? 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -179,7 +178,7 @@ export default function Leaderboard() {
           </button>
           <button
             onClick={() => setSortBy('likes')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all transform hover:scale-105 ${
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all transform hover:scale-105 ${
               sortBy === 'likes'
                 ? 'bg-gradient-to-r from-pink-400 to-red-400 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -192,42 +191,53 @@ export default function Leaderboard() {
 
       {loading ? (
         <div className="text-center py-8">
-          <div className="inline-block animate-spin text-4xl mb-2">🐕</div>
-          <p className="text-gray-500 text-sm">Loading leaderboard...</p>
+          <Spinner size="lg" className="mx-auto mb-4" />
+          <p className="text-gray-600 text-sm">Loading leaderboard...</p>
         </div>
       ) : leaderboard.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-6xl mb-4">🐕</div>
-          <p className="text-gray-500 text-sm">No entries yet. Start uploading to appear on the leaderboard!</p>
-        </div>
+        <EmptyState
+          icon="🏆"
+          title="No rankings yet"
+          description="Start sharing encounters to appear on the leaderboard!"
+        />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-1 sm:space-y-3">
           {leaderboard.map((entry, index) => (
             <div
               key={entry.user_id}
-              className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border-2 border-yellow-200 hover:shadow-lg transition-all transform hover:scale-105"
+              className="flex items-center gap-2 sm:gap-3 py-2 sm:p-4 sm:bg-yellow-50 sm:rounded-xl sm:border-2 sm:border-yellow-200 sm:hover:shadow-lg sm:transition-all sm:transform sm:hover:scale-105 border-b border-gray-200 sm:border-b-0 last:border-b-0 overflow-hidden"
             >
-              <div className="flex items-center gap-4">
-                <div className="text-3xl">{getRankEmoji(index + 1)}</div>
-                <div className="text-4xl">{entry.avatar || getDogAvatar(entry.user_id)}</div>
-                <div>
-                  {entry.user_id === 'anonymous' ? (
-                    <p className="text-sm font-bold text-gray-900">
-                      {entry.display_name || 'Anonymous User'}
-                    </p>
-                  ) : (
-                    <Link
-                      href={`/profile/${entry.user_id}`}
-                      className="text-sm font-bold text-gray-900 hover:text-yellow-600 transition-colors block"
-                    >
-                      {entry.display_name || `User ${entry.user_id.slice(0, 8)}`}
-                    </Link>
-                  )}
-                  <p className="text-xs text-gray-600 flex items-center gap-2 mt-1">
-                    <span>📤 {entry.upload_count} uploads</span>
-                    <span>•</span>
-                    <span>❤️ {entry.total_likes} likes</span>
+              {/* Rank Badge */}
+              <div className="text-xl sm:text-3xl flex-shrink-0">{getRankEmoji(index + 1)}</div>
+              
+              {/* Dog Icon */}
+              <div className="text-2xl sm:text-4xl flex-shrink-0">{entry.avatar || getDogAvatar(entry.user_id)}</div>
+              
+              {/* User Name */}
+              <div className="flex-shrink min-w-0 max-w-[120px] sm:max-w-none sm:flex-1 flex items-center">
+                {entry.user_id === 'anonymous' ? (
+                  <p className="text-xs sm:text-sm font-bold text-gray-900 truncate whitespace-nowrap leading-none">
+                    {entry.display_name || 'Anonymous User'}
                   </p>
+                ) : (
+                  <Link
+                    href={`/profile/${entry.user_id}`}
+                    className="text-xs sm:text-sm font-bold text-gray-900 hover:text-yellow-600 transition-colors block truncate whitespace-nowrap leading-none"
+                  >
+                    {entry.display_name || `User ${entry.user_id.slice(0, 8)}`}
+                  </Link>
+                )}
+              </div>
+              
+              {/* Stats in one row */}
+              <div className="flex items-center gap-1.5 sm:gap-4 flex-shrink-0 ml-auto">
+                <div className="flex items-center gap-0.5 sm:gap-1">
+                  <span className="text-sm sm:text-lg">📤</span>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap">{entry.upload_count}</span>
+                </div>
+                <div className="flex items-center gap-0.5 sm:gap-1">
+                  <span className="text-sm sm:text-lg">❤️</span>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap">{entry.total_likes}</span>
                 </div>
               </div>
             </div>

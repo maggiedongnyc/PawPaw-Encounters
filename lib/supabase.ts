@@ -28,10 +28,36 @@ export const getCurrentUser = async () => {
 
 export const signInWithEmail = async (email: string) => {
   try {
+    // Always use the current origin - this will be the IP address if accessed via IP,
+    // or localhost if accessed via localhost, or the production domain in production
+    let redirectUrl: string | undefined
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin
+      
+      // If accessing via localhost, try to detect if we should use network IP
+      // For mobile testing, users should access via IP address
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        // Check if we can detect the network IP from environment or use a default
+        // For now, we'll use the origin as-is but log a warning
+        console.warn('⚠️ Accessing via localhost - magic link will use localhost. For mobile, access via your network IP (e.g., http://192.168.4.22:3000)')
+        redirectUrl = `${origin}/auth/callback`
+      } else {
+        redirectUrl = `${origin}/auth/callback`
+      }
+      
+      // Debug logging only in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔗 Magic link redirect URL:', redirectUrl)
+        console.log('📍 Current origin:', origin)
+        console.log('📱 For mobile: Make sure you accessed the app via', origin.includes('localhost') ? 'http://192.168.4.22:3000' : origin)
+      }
+    }
+    
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+        emailRedirectTo: redirectUrl,
+        shouldCreateUser: true,
       },
     })
     

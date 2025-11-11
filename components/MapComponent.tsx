@@ -39,13 +39,16 @@ export default function MapComponent({ onLocationSelect, initialLocation }: MapC
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    // Defer setState to avoid synchronous state update warning
+    setTimeout(() => {
+      setMounted(true)
+    }, 0)
   }, [])
 
   if (!mounted) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500">Loading map...</p>
+        <p className="text-gray-600">Loading map...</p>
       </div>
     )
   }

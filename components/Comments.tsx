@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import UserProfileLink from './UserProfileLink'
+import toast from 'react-hot-toast'
 
 interface Comment {
   id: string
@@ -16,9 +17,11 @@ interface Comment {
 
 interface CommentsProps {
   encounterId: string
+  isExpanded?: boolean
+  onCommentAdded?: () => void
 }
 
-export default function Comments({ encounterId }: CommentsProps) {
+export default function Comments({ encounterId, isExpanded = false, onCommentAdded }: CommentsProps) {
   // Get authenticated user
   const { user } = useAuth()
   
@@ -28,6 +31,17 @@ export default function Comments({ encounterId }: CommentsProps) {
   const [submitting, setSubmitting] = useState(false)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editCommentText, setEditCommentText] = useState('')
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Focus textarea when expanded and user is signed in
+  useEffect(() => {
+    if (isExpanded && commentTextareaRef.current && user) {
+      setTimeout(() => {
+        commentTextareaRef.current?.focus()
+        commentTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    }
+  }, [isExpanded, user])
 
   useEffect(() => {
     fetchComments()
@@ -54,12 +68,15 @@ export default function Comments({ encounterId }: CommentsProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newComment.trim()) return
+    e.stopPropagation()
+    
+    if (!newComment.trim()) {
+      return
+    }
     
     // Require authentication to comment
     if (!user) {
       alert('Please sign in to comment. You will be redirected to the sign-in page.')
-      // Could redirect to sign-in, but for now just show alert
       return
     }
 
@@ -130,13 +147,13 @@ export default function Comments({ encounterId }: CommentsProps) {
         throw new Error(errorMsg)
       }
 
-      console.log('Comment created successfully with user_id:', user.id)
-      
       // Note: Notification is automatically created by the database trigger (trigger_notify_on_comment)
       // No need to manually create notification here to avoid duplicates
       
+      toast.success('Comment posted!')
       setNewComment('')
-      fetchComments()
+      await fetchComments()
+      onCommentAdded?.()
     } catch (err) {
       console.error('Error adding comment:', err)
       let errorMessage = 'Unknown error'
@@ -158,7 +175,7 @@ export default function Comments({ encounterId }: CommentsProps) {
       }
       
       console.error('Error details:', errorMessage, 'Full error:', err)
-      alert(`Failed to post comment: ${errorMessage}. Please try again.`)
+      toast.error(`Failed to post comment: ${errorMessage}`)
     } finally {
       setSubmitting(false)
     }
@@ -174,34 +191,17 @@ export default function Comments({ encounterId }: CommentsProps) {
     if (commentUserId && currentUserId && commentUserId === currentUserId) {
       setEditingCommentId(comment.id)
       setEditCommentText(comment.comment)
-    } else {
-      console.log('Cannot edit: user mismatch', { 
-        commentUserId: comment.user_id, 
-        commentUserIdString: commentUserId,
-        currentUserId: user.id,
-        currentUserIdString: currentUserId,
-        match: commentUserId === currentUserId
-      })
     }
   }
   
   // Helper function to check if user owns comment
   const isOwnComment = (comment: Comment): boolean => {
     if (!user || !user.id || !comment.user_id) {
-      console.log('isOwnComment: missing data', { hasUser: !!user, hasUserId: !!user?.id, hasCommentUserId: !!comment.user_id })
       return false
     }
     const commentUserId = String(comment.user_id).trim()
     const currentUserId = String(user.id).trim()
-    const matches = commentUserId === currentUserId
-    console.log('isOwnComment check:', { 
-      commentUserId, 
-      currentUserId, 
-      matches,
-      commentUserIdLength: commentUserId.length,
-      currentUserIdLength: currentUserId.length
-    })
-    return matches
+    return commentUserId === currentUserId
   }
 
   const handleCancelEdit = () => {
@@ -267,18 +267,24 @@ export default function Comments({ encounterId }: CommentsProps) {
     })
   }
 
+  if (!isExpanded) {
+    return null
+  }
+
   return (
     <div className="mt-4">
       <h4 className="text-sm font-semibold mb-3">Comments</h4>
       
       {/* Comment Form - Only show if authenticated */}
       {user ? (
-        <form onSubmit={handleSubmit} className="mb-4">
+        <form onSubmit={handleSubmit} className="mb-4" noValidate>
           <textarea
+            ref={commentTextareaRef}
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Add a comment..."
             rows={2}
+            id="comment-textarea"
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm
               focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
@@ -286,30 +292,33 @@ export default function Comments({ encounterId }: CommentsProps) {
             type="submit"
             disabled={submitting || !newComment.trim()}
             className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-md
-              hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? 'Posting...' : 'Post Comment'}
           </button>
+          {!newComment.trim() && (
+            <p className="mt-1 text-xs text-gray-500">Type a comment to enable the button</p>
+          )}
         </form>
       ) : (
-        <div className="mb-4 p-3 bg-yellow-50 border-2 border-yellow-200 rounded-md">
-          <p className="text-sm text-yellow-800 mb-2">
-            💬 Sign in to add a comment
+        <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-md text-center">
+          <p className="text-sm text-yellow-800 mb-3 font-semibold">
+            🐾 Sign in to comment on the paw!
           </p>
           <Link
             href="/signin"
-            className="text-sm text-blue-600 hover:text-blue-800 underline font-medium"
+            className="inline-block px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors font-semibold"
           >
-            Go to sign in →
+            Sign In →
           </Link>
         </div>
       )}
 
       {/* Comments List - Anyone can view */}
       {loading ? (
-        <p className="text-sm text-gray-500">Loading comments...</p>
+        <p className="text-sm text-gray-600">Loading comments...</p>
       ) : comments.length === 0 ? (
-        <p className="text-sm text-gray-500">No comments yet. {user ? 'Be the first to comment!' : 'Sign in to be the first to comment!'}</p>
+        <p className="text-sm text-gray-600">No comments yet. {user ? 'Be the first to comment!' : 'Sign in to be the first to comment!'}</p>
       ) : (
         <div className="space-y-3">
           {comments.map((comment) => (
@@ -349,9 +358,9 @@ export default function Comments({ encounterId }: CommentsProps) {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <UserProfileLink userId={comment.user_id} showAvatar={true} className="text-xs font-medium" />
+                        <UserProfileLink userId={comment.user_id} showAvatar={true} className="text-xs font-semibold" />
                         <span className="text-xs text-gray-400">•</span>
-                        <p className="text-xs text-gray-500">{formatDate(comment.created_at)}</p>
+                        <p className="text-xs text-gray-600">{formatDate(comment.created_at)}</p>
                       </div>
                       {/* Show edit/delete buttons only for own comments */}
                       {isOwnComment(comment) && (

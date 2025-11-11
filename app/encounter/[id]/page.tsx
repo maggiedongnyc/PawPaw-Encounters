@@ -40,12 +40,29 @@ export default function EncounterDetailPage() {
   const [loading, setLoading] = useState(true)
   const [neighborhoodName, setNeighborhoodName] = useState<string>('')
   const [isDeleting, setIsDeleting] = useState(false)
+  const [commentsExpanded, setCommentsExpanded] = useState(false)
+  const [commentCount, setCommentCount] = useState(0)
 
   useEffect(() => {
     if (encounterId) {
       loadEncounter()
+      fetchCommentCount()
     }
   }, [encounterId])
+
+  const fetchCommentCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('Comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('encounter_id', encounterId)
+
+      if (error) throw error
+      setCommentCount(count || 0)
+    } catch (error) {
+      console.error('Error fetching comment count:', error)
+    }
+  }
 
   const loadEncounter = async () => {
     try {
@@ -184,13 +201,10 @@ export default function EncounterDetailPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const year = date.getFullYear()
+    return `${month}/${day}/${year}`
   }
 
   const isOwnEncounter = user && encounter && encounter.user_id === user.id
@@ -264,14 +278,14 @@ export default function EncounterDetailPage() {
               <div className="absolute top-4 left-4 flex gap-2">
                 <Link
                   href={`/upload?edit=${encounter.id}`}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium shadow-lg"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-semibold shadow-lg"
                 >
                   ✏️ Edit
                 </Link>
                 <button
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium shadow-lg disabled:opacity-50"
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-semibold shadow-lg disabled:opacity-50"
                 >
                   {isDeleting ? 'Deleting...' : '🗑️ Delete'}
                 </button>
@@ -289,19 +303,19 @@ export default function EncounterDetailPage() {
             {/* Tags */}
             <div className="flex flex-wrap gap-2 mb-4">
               {encounter.breed && (
-                <span className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 rounded-full flex items-center gap-1">
+                <span className="px-3 py-1.5 text-sm font-semibold bg-yellow-100 text-yellow-900 rounded-full flex items-center gap-1">
                   <span>{getTagEmoji(encounter.breed, 'breed')}</span>
                   {encounter.breed}
                 </span>
               )}
               {encounter.size && (
-                <span className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 rounded-full flex items-center gap-1">
+                <span className="px-3 py-1.5 text-sm font-semibold bg-blue-100 text-blue-900 rounded-full flex items-center gap-1">
                   <span>{getTagEmoji(encounter.size, 'size')}</span>
                   {encounter.size}
                 </span>
               )}
               {encounter.mood && (
-                <span className="px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-green-100 to-green-200 text-green-800 rounded-full flex items-center gap-1">
+                <span className="px-3 py-1.5 text-sm font-semibold bg-green-100 text-green-900 rounded-full flex items-center gap-1">
                   <span>{getTagEmoji(encounter.mood, 'mood')}</span>
                   {encounter.mood}
                 </span>
@@ -323,7 +337,7 @@ export default function EncounterDetailPage() {
                 {/* Mobile: Add a "View Profile" button for clarity */}
                 <Link
                   href={`/profile/${encounter.user_id}`}
-                  className="sm:hidden px-4 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 active:bg-blue-700 transition-colors touch-manipulation shadow-sm"
+                  className="sm:hidden px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 active:bg-blue-700 transition-colors touch-manipulation shadow-sm"
                   onClick={(e) => e.stopPropagation()}
                 >
                   View Profile →
@@ -334,7 +348,7 @@ export default function EncounterDetailPage() {
             {/* Location */}
             <div className="flex items-center text-sm mb-4" style={{ color: '#5C3D2E' }}>
               <span className="text-xl mr-2">📍</span>
-              <span className="font-medium">{getLocationName()}</span>
+              <span className="font-semibold">{getLocationName()}</span>
             </div>
 
             {/* Date */}
@@ -349,13 +363,22 @@ export default function EncounterDetailPage() {
                 onLike={handleLike}
                 encounterId={encounter.id}
               />
-              <div className="text-sm" style={{ color: '#5C3D2E' }}>
-                💬 Comments
-              </div>
+              <button
+                onClick={() => setCommentsExpanded(!commentsExpanded)}
+                className="flex items-center gap-1 text-sm hover:opacity-80 transition-opacity cursor-pointer"
+                style={{ color: '#5C3D2E' }}
+              >
+                <span>💬</span>
+                <span>{commentCount} {commentCount === 1 ? 'Comment' : 'Comments'}</span>
+              </button>
             </div>
 
             {/* Comments Section */}
-            <Comments encounterId={encounter.id} />
+            <Comments 
+              encounterId={encounter.id} 
+              isExpanded={commentsExpanded}
+              onCommentAdded={fetchCommentCount}
+            />
           </div>
         </div>
       </div>
