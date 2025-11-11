@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
+import UserProfileLink from './UserProfileLink'
 
 interface Comment {
   id: string
@@ -43,14 +44,6 @@ export default function Comments({ encounterId }: CommentsProps) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      console.log('Fetched comments:', data?.map(c => ({ 
-        id: c.id, 
-        user_id: c.user_id, 
-        user_id_type: typeof c.user_id,
-        user_id_string: String(c.user_id),
-        comment: c.comment.substring(0, 20) 
-      })))
-      console.log('Current user:', user ? { id: user.id, id_type: typeof user.id, id_string: String(user.id) } : 'null')
       setComments(data || [])
     } catch (err) {
       console.error('Error fetching comments:', err)
@@ -72,7 +65,18 @@ export default function Comments({ encounterId }: CommentsProps) {
 
     try {
       setSubmitting(true)
-      const { error } = await supabase
+      
+      // First, get the encounter to find the owner
+      const { data: encounter, error: encounterError } = await supabase
+        .from('Encounters')
+        .select('user_id')
+        .eq('id', encounterId)
+        .single()
+
+      if (encounterError) throw encounterError
+
+      // Insert the comment
+      const { data: commentData, error } = await supabase
         .from('Comments')
         .insert([
           {
@@ -81,15 +85,80 @@ export default function Comments({ encounterId }: CommentsProps) {
             user_id: user.id, // Use authenticated user ID
           },
         ])
+        .select()
+        .single()
 
-      if (error) throw error
+      if (error) {
+        // Log all possible error properties
+        const errorDetails = {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          status: (error as any).status,
+          statusText: (error as any).statusText,
+          error: (error as any).error,
+          fullError: error,
+          errorString: String(error),
+          errorJSON: JSON.stringify(error, Object.getOwnPropertyNames(error))
+        }
+        
+        // Log error details for debugging
+        console.error('Supabase error inserting comment:', errorDetails)
+        
+        // Try to extract error message from various possible locations
+        let errorMsg = 'Failed to post comment'
+        if (error.message) {
+          errorMsg = error.message
+        } else if ((error as any).error?.message) {
+          errorMsg = (error as any).error.message
+        } else if (error.code) {
+          errorMsg = `Database error (${error.code})`
+          if (error.details) errorMsg += `: ${error.details}`
+          if (error.hint) errorMsg += ` (${error.hint})`
+        } else if ((error as any).status) {
+          errorMsg = `HTTP error ${(error as any).status}: ${(error as any).statusText || 'Unknown error'}`
+        } else {
+          // Try to stringify the error
+          try {
+            errorMsg = JSON.stringify(error, Object.getOwnPropertyNames(error))
+          } catch {
+            errorMsg = String(error) || 'Unknown database error'
+          }
+        }
+        
+        throw new Error(errorMsg)
+      }
 
       console.log('Comment created successfully with user_id:', user.id)
+      
+      // Note: Notification is automatically created by the database trigger (trigger_notify_on_comment)
+      // No need to manually create notification here to avoid duplicates
+      
       setNewComment('')
       fetchComments()
     } catch (err) {
       console.error('Error adding comment:', err)
-      alert('Failed to post comment. Please try again.')
+      let errorMessage = 'Unknown error'
+      
+      if (err instanceof Error) {
+        errorMessage = err.message
+      } else if (typeof err === 'object' && err !== null) {
+        // Handle Supabase errors
+        const supabaseError = err as any
+        if (supabaseError.message) {
+          errorMessage = supabaseError.message
+        } else if (supabaseError.code) {
+          errorMessage = `Error ${supabaseError.code}: ${supabaseError.details || supabaseError.hint || 'Database error'}`
+        } else {
+          errorMessage = JSON.stringify(err)
+        }
+      } else {
+        errorMessage = String(err)
+      }
+      
+      console.error('Error details:', errorMessage, 'Full error:', err)
+      alert(`Failed to post comment: ${errorMessage}. Please try again.`)
     } finally {
       setSubmitting(false)
     }
@@ -279,7 +348,11 @@ export default function Comments({ encounterId }: CommentsProps) {
                   <p className="text-sm text-gray-800 mb-1">{comment.comment}</p>
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500">{formatDate(comment.created_at)}</p>
+                      <div className="flex items-center gap-2">
+                        <UserProfileLink userId={comment.user_id} showAvatar={true} className="text-xs font-medium" />
+                        <span className="text-xs text-gray-400">•</span>
+                        <p className="text-xs text-gray-500">{formatDate(comment.created_at)}</p>
+                      </div>
                       {/* Show edit/delete buttons only for own comments */}
                       {isOwnComment(comment) && (
                         <div className="flex items-center gap-2">

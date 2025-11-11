@@ -16,6 +16,10 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 })
 
+
+
+
+
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {
@@ -44,7 +48,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     }, 5000) // 5 second timeout
 
-    // Check for existing session and auto-sign-in if logged in within 24 hours
+    // Check for existing session and auto-sign-in if logged in within 7 days
     const initAuth = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -56,21 +60,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (mounted) {
           if (timeoutId) clearTimeout(timeoutId)
           
-          // Check if session exists and user logged in within 24 hours
+          // Check if session exists and user logged in within 7 days
           if (session?.user) {
             const lastSignIn = session.user.last_sign_in_at
             if (lastSignIn) {
               const lastSignInTime = new Date(lastSignIn).getTime()
               const now = Date.now()
-              const hoursSinceLastSignIn = (now - lastSignInTime) / (1000 * 60 * 60)
+              const daysSinceLastSignIn = (now - lastSignInTime) / (1000 * 60 * 60 * 24)
               
-              // If logged in within 24 hours, automatically sign in
-              if (hoursSinceLastSignIn < 24) {
-                console.log('User logged in within 24 hours, auto-signing in')
+              // If logged in within 7 days, automatically sign in
+              if (daysSinceLastSignIn < 7) {
+                console.log('User logged in within 7 days, auto-signing in')
                 setUser(session.user)
               } else {
                 // Session expired, sign out
-                console.log('Session expired (more than 24 hours), signing out')
+                console.log('Session expired (more than 7 days), signing out')
                 await supabase.auth.signOut()
                 setUser(null)
               }
@@ -101,20 +105,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (timeoutId) clearTimeout(timeoutId)
           
           if (session?.user) {
-            // Check if user logged in within 24 hours
+            // Check if user logged in within 7 days
             const lastSignIn = session.user.last_sign_in_at
             if (lastSignIn) {
               const lastSignInTime = new Date(lastSignIn).getTime()
               const now = Date.now()
-              const hoursSinceLastSignIn = (now - lastSignInTime) / (1000 * 60 * 60)
+              const daysSinceLastSignIn = (now - lastSignInTime) / (1000 * 60 * 60 * 24)
               
-              // If logged in within 24 hours, automatically sign in
-              if (hoursSinceLastSignIn < 24) {
-                console.log('User logged in within 24 hours, auto-signing in')
+              // If logged in within 7 days, automatically sign in
+              if (daysSinceLastSignIn < 7) {
+                console.log('User logged in within 7 days, auto-signing in')
                 setUser(session.user)
               } else {
                 // Session expired, sign out
-                console.log('Session expired (more than 24 hours), signing out')
+                console.log('Session expired (more than 7 days), signing out')
                 await supabase.auth.signOut()
                 setUser(null)
               }

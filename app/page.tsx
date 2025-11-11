@@ -9,6 +9,11 @@ import dynamic from 'next/dynamic'
 import Comments from '@/components/Comments'
 import LikeButton from '@/components/LikeButton'
 import Hero from '@/components/Hero'
+import SearchBar from '@/components/SearchBar'
+import UserDisplayName from '@/components/UserDisplayName'
+import UserProfileLink from '@/components/UserProfileLink'
+import NotificationBell from '@/components/NotificationBell'
+import BottomNavigation from '@/components/BottomNavigation'
 import { reverseGeocode } from '@/lib/geocoding'
 import toast from 'react-hot-toast'
 
@@ -89,6 +94,10 @@ export default function Home() {
   const router = useRouter()
   const [encounters, setEncounters] = useState<Encounter[]>([])
   const [filteredEncounters, setFilteredEncounters] = useState<Encounter[]>([])
+  const [searchResults, setSearchResults] = useState<Encounter[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [showSearchModal, setShowSearchModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [neighborhoodNames, setNeighborhoodNames] = useState<Record<string, string>>({})
@@ -107,13 +116,26 @@ export default function Home() {
   const [locationRadius, setLocationRadius] = useState<number>(0)
   const [userLocation, setUserLocation] = useState<LocationData | null>(null)
 
+  // Close search modal on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showSearchModal) {
+        setShowSearchModal(false)
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [showSearchModal])
+
   useEffect(() => {
     fetchEncounters()
     getUserLocation()
 
     // Set up real-time subscription for all encounters
+    // Use unique channel name to prevent conflicts
+    const channelName = `encounters-changes-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const channel = supabase
-      .channel('encounters-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -125,7 +147,6 @@ export default function Home() {
           // Only add if it doesn't already exist (prevent duplicates)
           const newEncounter = payload.new as Encounter
           if (processedEncounterIds.current.has(newEncounter.id)) {
-            console.log('Duplicate encounter prevented (already processed):', newEncounter.id)
             return
           }
           
@@ -133,14 +154,12 @@ export default function Home() {
             // Check if already in state
             const exists = currentEncounters.some(e => e.id === newEncounter.id)
             if (exists) {
-              console.log('Duplicate encounter prevented (in state):', newEncounter.id)
               return currentEncounters
             }
             
             // Mark as processed
             processedEncounterIds.current.add(newEncounter.id)
             
-            console.log('Adding new encounter via real-time:', newEncounter.id)
             return [newEncounter, ...currentEncounters]
           })
         }
@@ -179,13 +198,21 @@ export default function Home() {
 
     // Cleanup subscription on unmount
     return () => {
-      supabase.removeChannel(channel)
+      channel.unsubscribe().then(() => {
+        supabase.removeChannel(channel)
+      }).catch((err) => {
+        console.warn('Error unsubscribing from encounters channel:', err)
+        supabase.removeChannel(channel)
+      })
     }
   }, [])
 
   useEffect(() => {
-    applyFilters()
-  }, [encounters, selectedBreed, selectedSize, selectedMood, dateFilter, locationRadius, userLocation])
+    // Only apply filters if not searching
+    if (searchQuery !== 'searching') {
+      applyFilters()
+    }
+  }, [encounters, selectedBreed, selectedSize, selectedMood, dateFilter, locationRadius, userLocation, searchQuery])
 
   useEffect(() => {
     if (encounters.length === 0) return
@@ -214,8 +241,10 @@ export default function Home() {
   // Set up real-time subscription for comments (separate from fetchEncounters)
   useEffect(() => {
     // Set up real-time subscription for comments
+    // Use unique channel name to prevent conflicts
+    const commentsChannelName = `comments-changes-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const commentsChannel = supabase
-      .channel('comments-changes')
+      .channel(commentsChannelName)
       .on(
         'postgres_changes',
         {
@@ -270,7 +299,12 @@ export default function Home() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(commentsChannel)
+      commentsChannel.unsubscribe().then(() => {
+        supabase.removeChannel(commentsChannel)
+      }).catch((err) => {
+        console.warn('Error unsubscribing from comments channel:', err)
+        supabase.removeChannel(commentsChannel)
+      })
     }
   }, [])
 
@@ -457,35 +491,47 @@ export default function Home() {
     return `Lat: ${location.lat.toFixed(4)}, Lng: ${location.lng.toFixed(4)}`
   }
 
-  const handleLike = async (encounterId: string, currentLikes: number) => {
+  const handleLike = async (encounterId: string, newLikesCount: number) => {
+    if (!user) {
+      return
+    }
+
     try {
-      const { error } = await supabase
-        .from('Encounters')
-        .update({ likes: currentLikes + 1 })
-        .eq('id', encounterId)
-
-      if (error) throw error
-
+      // Update local state
       setEncounters(encounters.map(e => 
-        e.id === encounterId ? { ...e, likes: e.likes + 1 } : e
+        e.id === encounterId ? { ...e, likes: newLikesCount } : e
       ))
       setFilteredEncounters(filteredEncounters.map(e => 
-        e.id === encounterId ? { ...e, likes: e.likes + 1 } : e
+        e.id === encounterId ? { ...e, likes: newLikesCount } : e
       ))
-      toast.success('Liked! ❤️', { duration: 2000 })
+
+      // Get encounter to find owner and check if this is a like (not unlike)
+      const { data: encounter } = await supabase
+        .from('Encounters')
+        .select('user_id, likes')
+        .eq('id', encounterId)
+        .single()
+
+      if (encounter && newLikesCount > encounter.likes) {
+        // This is a like (count increased), create notification
+        if (encounter.user_id && encounter.user_id !== user.id) {
+          const { createNotification } = await import('@/lib/notifications')
+          await createNotification(encounter.user_id, 'like', {
+            encounterId: encounterId,
+            fromUserId: user.id,
+          })
+        }
+      }
     } catch (err) {
-      console.error('Error liking encounter:', err)
-      toast.error('Failed to like encounter')
+      console.error('Error updating like:', err)
     }
   }
 
   const handleDoubleClickEncounter = (encounter: Encounter) => {
     if (!user || encounter.user_id !== user.id) {
-      console.log('Double-click blocked: user not logged in or not owner', { user: !!user, encounterUserId: encounter.user_id, currentUserId: user?.id })
       return
     }
     // Navigate to upload page with edit query param
-    console.log('Double-click detected, navigating to edit mode:', encounter.id)
     router.push(`/upload?edit=${encounter.id}`)
   }
 
@@ -596,11 +642,21 @@ export default function Home() {
 
   const formatCommentDate = (dateString: string) => {
     const date = new Date(dateString)
-    const now = new Date()
+    // Use a fixed "now" time to avoid hydration mismatches
+    // This will be slightly inaccurate but prevents hydration errors
+    const now = typeof window !== 'undefined' ? new Date() : date
     const diffMs = now.getTime() - date.getTime()
     const diffMins = Math.floor(diffMs / 60000)
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
+
+    // For server-side, just return the date without relative time
+    if (typeof window === 'undefined') {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })
+    }
 
     if (diffMins < 1) return 'just now'
     if (diffMins < 60) return `${diffMins}m ago`
@@ -626,6 +682,17 @@ export default function Home() {
         <div className="absolute top-0.5 right-4 sm:top-1 sm:right-6 flex items-center gap-3 flex-wrap z-30">
           {user ? (
             <>
+              {/* Search Icon */}
+              <button
+                onClick={() => setShowSearchModal(true)}
+                className="p-2 text-white hover:text-yellow-200 transition-colors rounded-full hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                aria-label="Search encounters"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+              <NotificationBell />
               <Link
                 href="/my-pawpaws"
                 className="px-4 py-2 text-sm font-fredoka font-semibold text-white rounded-full transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
@@ -642,6 +709,7 @@ export default function Home() {
                   e.currentTarget.style.background = 'linear-gradient(to right, #FFC845, #FFD166)'
                   e.currentTarget.style.boxShadow = '0 8px 20px rgba(255, 181, 0, 0.3)'
                 }}
+                aria-label="My PawPaws"
               >
                 🐾 My PawPaws
               </Link>
@@ -651,6 +719,7 @@ export default function Home() {
                   router.push('/') // Redirect to home after sign out
                 }}
                 className="px-4 py-2 text-sm font-fredoka font-semibold text-white rounded-full transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
+                aria-label="Sign out"
                 style={{ 
                   fontFamily: 'var(--font-fredoka), sans-serif',
                   background: 'linear-gradient(to right, #FFC845, #FFD166)',
@@ -669,16 +738,29 @@ export default function Home() {
               </button>
             </>
           ) : (
-            <Link
-              href="/signin"
-              className="px-6 py-3 text-sm font-fredoka font-semibold text-white rounded-full transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-              style={{
-                background: 'linear-gradient(to right, #FFB500, #FFC845)',
-                boxShadow: '0 8px 20px rgba(255, 181, 0, 0.3)'
-              }}
-            >
-              🔐 Sign In
-            </Link>
+            <>
+              {/* Search Icon */}
+              <button
+                onClick={() => setShowSearchModal(true)}
+                className="p-2 text-white hover:text-yellow-200 transition-colors rounded-full hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                aria-label="Search encounters"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+              <Link
+                href="/signin"
+                className="px-6 py-3 text-sm font-fredoka font-semibold text-white rounded-full transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                style={{
+                  background: 'linear-gradient(to right, #FFB500, #FFC845)',
+                  boxShadow: '0 8px 20px rgba(255, 181, 0, 0.3)'
+                }}
+                aria-label="Sign in"
+              >
+                🔐 Sign In
+              </Link>
+            </>
           )}
         </div>
 
@@ -686,12 +768,56 @@ export default function Home() {
         <Hero />
       </div>
 
+      {/* Search Modal */}
+      {showSearchModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center pt-20 px-4"
+          onClick={() => setShowSearchModal(false)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold" style={{ color: '#5C3D2E' }}>Search Encounters</h2>
+              <button
+                onClick={() => setShowSearchModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Close search"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <SearchBar
+              onSearch={(results) => {
+                setSearchResults(results)
+                setSearchQuery('searching')
+              }}
+              onSearchStart={() => {
+                setIsSearching(true)
+                setSearchQuery('searching')
+              }}
+              onSearchEnd={() => {
+                setIsSearching(false)
+              }}
+              onClear={() => {
+                setSearchQuery('')
+                setSearchResults([])
+              }}
+              placeholder="Search encounters by breed, description, or tags..."
+            />
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <div className="pt-0 pb-12 px-4 sm:px-6 lg:px-8 -mt-12 sm:-mt-14 lg:-mt-16 relative z-20">
+      <div className="pt-0 pb-12 px-4 sm:px-6 lg:px-8 -mt-16 sm:-mt-18 lg:-mt-20 relative z-20">
         <div className="max-w-7xl mx-auto">
           
           {/* Upload Button */}
-          <div className="flex justify-center gap-4 mb-2 relative z-30">
+          <div className="flex justify-center gap-4 mb-4 relative z-30">
             {user ? (
               <Link
                 href="/upload"
@@ -702,6 +828,7 @@ export default function Home() {
                   position: 'relative',
                   zIndex: 40
                 }}
+                aria-label="Upload your PawPaw encounter"
               >
                 📸 Upload Your PawPaw Encounter
               </Link>
@@ -725,6 +852,7 @@ export default function Home() {
               </div>
             )}
           </div>
+
         </div>
 
         {/* Error State */}
@@ -752,7 +880,7 @@ export default function Home() {
         )}
 
         {/* Empty Filter State */}
-        {!loading && !error && filteredEncounters.length === 0 && encounters.length > 0 && (
+        {!loading && !error && !isSearching && searchQuery === '' && filteredEncounters.length === 0 && encounters.length > 0 && (
           <div className="text-center py-8">
             <div className="text-6xl mb-4">🐕</div>
             <p className="text-[#5C3D2E] mb-4 font-medium">No encounters match your filters.</p>
@@ -765,14 +893,38 @@ export default function Home() {
                 setLocationRadius(0)
               }}
               className="px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-yellow-400 to-blue-500 rounded-lg hover:from-yellow-500 hover:to-blue-600 transition-all"
+              aria-label="Clear all filters"
             >
               Clear Filters
             </button>
           </div>
         )}
 
+        {/* Empty Search State */}
+        {!loading && !error && isSearching === false && searchQuery === 'searching' && searchResults.length === 0 && (
+          <div className="text-center py-8">
+            <div className="text-6xl mb-4">🔍</div>
+            <p className="text-[#5C3D2E] mb-4 font-medium">No encounters found matching your search.</p>
+            <p className="text-sm text-gray-600 mb-4">Try different keywords or clear your search.</p>
+            <button
+              onClick={() => {
+                setSearchQuery('')
+                setSearchResults([])
+                setShowSearchModal(false)
+              }}
+              className="px-6 py-2 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90"
+              style={{
+                background: 'linear-gradient(to right, #FFB500, #FFC845)',
+              }}
+              aria-label="Clear search"
+            >
+              Clear Search
+            </button>
+          </div>
+        )}
+
         {/* SECTION 1: Grid of Encounters */}
-        {!loading && filteredEncounters.length > 0 && (
+        {!loading && ((searchQuery === 'searching' && searchResults.length > 0) || (searchQuery === '' && filteredEncounters.length > 0)) && (
           <section className="mb-16 sm:mb-20 lg:mb-24">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold flex items-center gap-3" style={{ 
@@ -781,19 +933,46 @@ export default function Home() {
                 textShadow: '0 2px 4px rgba(255, 255, 255, 0.8)',
                 letterSpacing: '-0.02em'
               }}>
-                <span className="text-3xl md:text-4xl">🖼️</span>
-                <span>Recent Encounters</span>
+                <span className="text-3xl md:text-4xl">
+                  {searchQuery === 'searching' ? '🔍' : '🖼️'}
+                </span>
+                <span>
+                  {searchQuery === 'searching' 
+                    ? `Search Results (${searchResults.length})` 
+                    : 'Recent Encounters'}
+                </span>
               </h2>
-              {filteredEncounters.length > 12 && (
-                <Link
-                  href="#all"
-                  className="text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-1"
-                  style={{ color: '#5C3D2E' }}
-                >
-                  <span>View All</span>
-                  <span>→</span>
-                </Link>
-              )}
+              <div className="flex items-center gap-3">
+                {searchQuery === 'searching' && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('')
+                      setSearchResults([])
+                      setShowSearchModal(false)
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90 flex items-center gap-2"
+                    style={{
+                      background: 'linear-gradient(to right, #FFB500, #FFC845)',
+                    }}
+                    aria-label="Clear search and show all encounters"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Clear Search
+                  </button>
+                )}
+                {searchQuery === '' && filteredEncounters.length > 12 && (
+                  <Link
+                    href="#all"
+                    className="text-sm font-semibold transition-colors hover:opacity-80 flex items-center gap-1"
+                    style={{ color: '#5C3D2E' }}
+                  >
+                    <span>View All</span>
+                    <span>→</span>
+                  </Link>
+                )}
+              </div>
             </div>
             
             {/* Active Filter Chips */}
@@ -868,25 +1047,26 @@ export default function Home() {
             )}
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredEncounters.slice(0, 12).map((encounter) => {
+              {(searchQuery === 'searching' ? searchResults : filteredEncounters).slice(0, 12).map((encounter) => {
                 const location = parseLocation(encounter.location)
                 const encounterComments = commentsByEncounter[encounter.id] || []
                 const commentCount = commentCounts[encounter.id] || 0
-                const firstTwoComments = encounterComments.slice(0, 2)
+                const isExpanded = selectedEncounter === encounter.id
+                const commentsToShow = isExpanded ? encounterComments : encounterComments.slice(0, 2)
                 
-                // Debug: log comments for this encounter
-                if (encounterComments.length > 0) {
-                  console.log(`Encounter ${encounter.id} has ${encounterComments.length} comments:`, encounterComments)
-                }
                 return (
                   <div
                     key={encounter.id}
                     className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all duration-300 transform hover:-translate-y-1"
                   >
                     {/* Image */}
-                    <div 
-                      className="w-full h-64 overflow-hidden bg-gray-200 relative group cursor-pointer"
-                      onDoubleClick={() => handleDoubleClickEncounter(encounter)}
+                    <Link
+                      href={`/encounter/${encounter.id}`}
+                      className="w-full h-64 overflow-hidden bg-gray-200 relative group cursor-pointer block"
+                      onDoubleClick={(e) => {
+                        e.preventDefault()
+                        handleDoubleClickEncounter(encounter)
+                      }}
                     >
                       <img
                         src={encounter.photo_url}
@@ -909,32 +1089,32 @@ export default function Home() {
                       )}
                       {/* Gradient overlay */}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    </div>
+                    </Link>
 
                     {/* Content */}
                     <div className="p-5">
-                      {/* Delete button for own encounters */}
-                      {user && encounter.user_id === user.id && (
-                        <div className="flex justify-end gap-2 mb-2">
+                      {/* Title - Always at the top */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <h3 className="text-lg font-semibold line-clamp-2 flex-1" style={{ color: '#5C3D2E' }}>
+                          {encounter.description}
+                        </h3>
+                        {/* Delete button for own encounters - small and unobtrusive */}
+                        {user && encounter.user_id === user.id && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation() // Prevent double-click from triggering
                               handleDeleteEncounter(encounter.id)
                             }}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded-md hover:bg-gray-100"
+                            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded-md hover:bg-gray-100 flex-shrink-0"
                             title="Delete encounter"
+                            aria-label="Delete encounter"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
-                        </div>
-                      )}
-
-                      {/* Description */}
-                      <h3 className="text-lg font-semibold mb-3 line-clamp-2" style={{ color: '#5C3D2E' }}>
-                        {encounter.description}
-                      </h3>
+                        )}
+                      </div>
 
                       {/* Tags with Emojis */}
                       <div className="flex flex-wrap gap-2 mb-4">
@@ -958,27 +1138,71 @@ export default function Home() {
                         )}
                       </div>
 
-                      {/* Location - Neighborhood Name */}
-                      {location && (
-                        <div className="flex items-center text-sm mb-4" style={{ color: '#5C3D2E' }}>
-                          <span className="text-xl mr-2">📍</span>
-                          <span className="truncate font-medium">{getLocationName(encounter)}</span>
+                      {/* Posted By - More prominent on mobile */}
+                      {encounter.user_id && (
+                        <div className="flex items-center gap-2 mb-3 sm:mb-2">
+                          <span className="text-xs sm:text-xs" style={{ color: '#5C3D2E', opacity: 0.7 }}>Posted by</span>
+                          <UserDisplayName 
+                            userId={encounter.user_id} 
+                            showAvatar={true}
+                            className="text-sm sm:text-xs font-semibold px-2 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
+                            linkToProfile={true}
+                          />
+                          {/* Mobile: Add a "View Profile" button for clarity */}
+                          <Link
+                            href={`/profile/${encounter.user_id}`}
+                            className="sm:hidden text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-md font-medium hover:bg-blue-100 active:bg-blue-200 transition-colors touch-manipulation"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View Profile
+                          </Link>
                         </div>
                       )}
+
+                      {/* Location and Date - Combined */}
+                      <div className="flex items-center gap-3 text-xs mb-3" style={{ color: '#5C3D2E', opacity: 0.7 }}>
+                        {location && (
+                          <div className="flex items-center gap-1">
+                            <span>📍</span>
+                            <span className="truncate font-medium">{getLocationName(encounter)}</span>
+                          </div>
+                        )}
+                        {location && (
+                          <span className="text-gray-300">•</span>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <span>📅</span>
+                          <span>{formatDate(encounter.created_at)}</span>
+                        </div>
+                      </div>
 
                       {/* Likes and Comments Count */}
                       <div className="flex items-center justify-between mb-3">
                         <LikeButton
                           likes={encounter.likes}
-                          onLike={() => handleLike(encounter.id, encounter.likes)}
+                          onLike={(newLikes) => handleLike(encounter.id, newLikes)}
                           encounterId={encounter.id}
                         />
                         <button
-                          onClick={() => setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)}
-                          className="flex items-center gap-1 text-sm font-medium transition-colors cursor-pointer hover:opacity-80"
+                          onClick={() => {
+                            if (commentCount > 2) {
+                              setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)
+                            }
+                          }}
+                          className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                            commentCount > 2 ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                          }`}
                           style={{ color: '#5C3D2E' }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = '#FFB500'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = '#5C3D2E'}
+                          onMouseEnter={(e) => {
+                            if (commentCount > 2) {
+                              e.currentTarget.style.color = '#FFB500'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (commentCount > 2) {
+                              e.currentTarget.style.color = '#5C3D2E'
+                            }
+                          }}
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -987,20 +1211,28 @@ export default function Home() {
                         </button>
                       </div>
 
-                      {/* First 2 Comments */}
-                      {firstTwoComments.length > 0 && (
+                      {/* Comments Preview (first 2, or all if expanded) */}
+                      {commentsToShow.length > 0 && (
                         <div className="mb-3 pt-3 border-t border-gray-200">
                           <div className="space-y-2">
-                            {firstTwoComments.map((comment) => (
+                            {commentsToShow.map((comment) => (
                               <div key={comment.id} className="p-2 bg-gray-50 rounded-md">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1">
                                     <p className="text-sm font-medium" style={{ color: '#5C3D2E' }}>
                                       {comment.comment}
                                     </p>
-                                    <p className="text-xs mt-1" style={{ color: '#5C3D2E', opacity: 0.6 }}>
-                                      {formatCommentDate(comment.created_at)}
-                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <UserProfileLink 
+                                        userId={comment.user_id} 
+                                        showAvatar={false} 
+                                        className="text-xs font-medium" 
+                                      />
+                                      <span className="text-xs" style={{ color: '#5C3D2E', opacity: 0.4 }}>•</span>
+                                      <p className="text-xs" style={{ color: '#5C3D2E', opacity: 0.6 }}>
+                                        {formatCommentDate(comment.created_at)}
+                                      </p>
+                                    </div>
                                   </div>
                                   {/* Edit/Delete buttons for own comments */}
                                   {user && comment.user_id && String(comment.user_id) === String(user.id) && (
@@ -1038,12 +1270,7 @@ export default function Home() {
                         </div>
                       )}
 
-                      {/* Date */}
-                      <p className="text-xs mb-2 font-medium" style={{ color: '#5C3D2E', opacity: 0.8 }}>
-                        📅 {formatDate(encounter.created_at)}
-                      </p>
-
-                      {/* View All Comments Button */}
+                      {/* View All / Show Less Comments Button */}
                       {commentCount > 2 && (
                         <button
                           onClick={() => setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)}
@@ -1062,15 +1289,8 @@ export default function Home() {
                             e.currentTarget.style.borderColor = '#FFC845'
                           }}
                         >
-                          View all {commentCount} comments
+                          {isExpanded ? 'Show less' : `View all ${commentCount} comments`}
                         </button>
-                      )}
-
-                      {/* Full Comments Section (when expanded) */}
-                      {selectedEncounter === encounter.id && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <Comments encounterId={encounter.id} />
-                        </div>
                       )}
                     </div>
                   </div>
@@ -1081,15 +1301,20 @@ export default function Home() {
         )}
 
         {/* SECTION 2 & 3: Filters and Map Side-by-Side */}
-        {!loading && encounters.length > 0 && (
+        {!loading && (searchQuery === 'searching' ? searchResults.length > 0 : encounters.length > 0) && (
           <section className="mb-16 sm:mb-20 lg:mb-24">
             <div className="grid grid-cols-1 lg:grid-cols-[38.2%_61.8%] gap-8">
               {/* Filters */}
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <h2 className="text-2xl font-bold mb-6 flex items-center gap-2" style={{ color: '#5C3D2E' }}>
                   🔍 Filters
+                  {searchQuery === 'searching' && (
+                    <span className="ml-2 text-sm font-normal text-gray-500">
+                      (Search active)
+                    </span>
+                  )}
                 </h2>
-                <div className="space-y-4">
+                <div className={`space-y-4 ${searchQuery === 'searching' ? 'opacity-50 pointer-events-none' : ''}`}>
                   {/* Breed Filter */}
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: '#5C3D2E' }}>
@@ -1100,7 +1325,8 @@ export default function Home() {
                       value={selectedBreed}
                       onChange={(e) => setSelectedBreed(e.target.value)}
                       placeholder="Filter by breed..."
-                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400"
+                      disabled={searchQuery === 'searching'}
+                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       style={{ borderColor: '#FFC845' }}
                     />
                   </div>
@@ -1113,7 +1339,8 @@ export default function Home() {
                     <select
                       value={selectedSize}
                       onChange={(e) => setSelectedSize(e.target.value)}
-                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400"
+                      disabled={searchQuery === 'searching'}
+                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       style={{ borderColor: '#FFC845' }}
                     >
                       <option value="">All sizes</option>
@@ -1131,7 +1358,8 @@ export default function Home() {
                     <select
                       value={selectedMood}
                       onChange={(e) => setSelectedMood(e.target.value)}
-                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400"
+                      disabled={searchQuery === 'searching'}
+                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       style={{ borderColor: '#FFC845' }}
                     >
                       <option value="">All moods</option>
@@ -1149,7 +1377,8 @@ export default function Home() {
                     <select
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
-                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400"
+                      disabled={searchQuery === 'searching'}
+                      className="w-full px-4 py-2 border-2 rounded-lg focus:outline-none focus:border-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       style={{ borderColor: '#FFC845' }}
                     >
                       <option value="all">All time</option>
@@ -1170,11 +1399,17 @@ export default function Home() {
                       max="50"
                       value={locationRadius}
                       onChange={(e) => setLocationRadius(Number(e.target.value))}
-                      className="w-full"
+                      disabled={searchQuery === 'searching'}
+                      className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Location radius filter in kilometers"
+                      aria-valuemin={0}
+                      aria-valuemax={50}
+                      aria-valuenow={locationRadius}
                     />
                     <button
                       onClick={() => setLocationRadius(0)}
                       className="mt-2 text-sm text-gray-600 hover:text-gray-800 underline"
+                      aria-label="Clear location radius filter"
                     >
                       Clear radius
                     </button>
@@ -1190,6 +1425,7 @@ export default function Home() {
                       setLocationRadius(0)
                     }}
                     className="w-full px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-yellow-400 to-blue-500 rounded-lg hover:from-yellow-500 hover:to-blue-600 transition-all"
+                    aria-label="Clear all filters"
                   >
                     Clear All Filters
                   </button>
@@ -1204,7 +1440,7 @@ export default function Home() {
                   </h2>
                 </div>
                 <div className="h-[500px] w-full rounded-xl overflow-hidden border-2 border-gray-300 shadow-xl">
-                  <MapView key="main-map-view" encounters={filteredEncounters} />
+                  <MapView key="main-map-view" encounters={searchQuery === 'searching' ? searchResults : filteredEncounters} />
                 </div>
               </div>
             </div>
@@ -1219,6 +1455,8 @@ export default function Home() {
                 onClick={() => setShowLeaderboard(!showLeaderboard)}
                 className="w-full flex items-center justify-between text-2xl font-bold mb-4"
                 style={{ color: '#5C3D2E' }}
+                aria-label={showLeaderboard ? 'Hide leaderboard' : 'Show leaderboard'}
+                aria-expanded={showLeaderboard}
               >
                 <span className="flex items-center gap-2">
                   🏆 Leaderboard
@@ -1234,6 +1472,12 @@ export default function Home() {
           </section>
         )}
       </div>
+      
+      {/* Bottom Navigation - Mobile Only */}
+      <BottomNavigation />
+      
+      {/* Add padding to bottom of main content to prevent overlap with bottom nav */}
+      <div className="h-16 sm:hidden" aria-hidden="true"></div>
     </main>
   )
 }

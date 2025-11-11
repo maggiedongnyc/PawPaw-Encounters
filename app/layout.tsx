@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Fredoka } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Background from "@/components/Background";
+import BottomNavigation from "@/components/BottomNavigation";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
@@ -27,6 +29,13 @@ export const metadata: Metadata = {
   description: "Share your dog encounters with the world!",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,9 +47,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} antialiased relative`}
       >
         <Background />
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            {children}
+            <BottomNavigation />
+          </AuthProvider>
+        </ErrorBoundary>
         <Toaster 
           position="top-right"
           toastOptions={{

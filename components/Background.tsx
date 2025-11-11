@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 
 export default function Background() {
   const [mounted, setMounted] = useState(false)
@@ -50,20 +50,21 @@ export default function Background() {
   }
 
   // Calculate rotation angle based on path direction
-  const calculateRotation = (currentPoint: { x: number; y: number }, nextPoint: { x: number; y: number } | null, baseRotation: number) => {
+  const calculateRotation = (currentPoint: { x: number; y: number }, nextPoint: { x: number; y: number } | null, baseRotation: number, seededRandom?: () => number) => {
     if (!nextPoint) return baseRotation
     const dx = nextPoint.x - currentPoint.x
     const dy = nextPoint.y - currentPoint.y
     const angle = Math.atan2(dy, dx) * (180 / Math.PI)
-    return angle + (Math.random() - 0.5) * 10 // Add ±5° variation
+    const random = seededRandom || Math.random
+    return angle + (random() - 0.5) * 10 // Add ±5° variation
   }
 
   // Generate random size based on mix ratio: 30% small, 50% medium, 20% large
-  const getRandomSize = () => {
-    const rand = Math.random()
-    if (rand < 0.3) return Math.random() * 10 + 30 // 30-40px (small)
-    if (rand < 0.8) return Math.random() * 15 + 45 // 45-60px (medium)
-    return Math.random() * 15 + 65 // 65-80px (large)
+  const getRandomSize = (randomFn: () => number = Math.random) => {
+    const rand = randomFn()
+    if (rand < 0.3) return randomFn() * 10 + 30 // 30-40px (small)
+    if (rand < 0.8) return randomFn() * 15 + 45 // 45-60px (medium)
+    return randomFn() * 15 + 65 // 65-80px (large)
   }
 
   // Define natural walking paths - only edges and corners (avoid center 25-75% completely)
@@ -143,8 +144,10 @@ export default function Background() {
     }
   ]
 
-  // Generate paw prints from paths
-  const pawPrints = (() => {
+  // Generate paw prints from paths - use useMemo with seeded random for consistency
+  const pawPrints = useMemo(() => {
+    if (!mounted) return []
+    
     const prints: Array<{
       id: string
       left: number
@@ -157,24 +160,31 @@ export default function Background() {
       startOffset: number
     }> = []
 
+    // Use a seeded random function for consistent results across server/client
+    let seed = 12345 // Fixed seed for consistency
+    const seededRandom = () => {
+      seed = (seed * 9301 + 49297) % 233280
+      return seed / 233280
+    }
+
     paths.forEach((path) => {
       path.points.forEach((point, idx) => {
         const nextPoint = idx < path.points.length - 1 ? path.points[idx + 1] : null
-        const baseRotation = calculateRotation(point, nextPoint, 0)
+        const baseRotation = calculateRotation(point, nextPoint, 0, seededRandom)
         
         // Vary spacing along path (60-120px equivalent in %)
-        const spacingVariation = Math.random() * 0.5 + 0.75 // 0.75-1.25 multiplier
+        const spacingVariation = seededRandom() * 0.5 + 0.75 // 0.75-1.25 multiplier
         
         prints.push({
           id: `${path.name}-${idx}`,
-          left: point.x + (Math.random() - 0.5) * 3, // Small random offset
-          top: point.y + (Math.random() - 0.5) * 3,
-          size: getRandomSize(),
-          rotation: baseRotation + (Math.random() - 0.5) * 10, // ±5° variation
-          delay: Math.random() * 5, // Stagger fade-in over 0-5 seconds
-          duration: Math.random() * 9 + 12, // 12-21 seconds for float (3x slower)
-          opacity: Math.random() * 0.2 + 0.3, // 0.3-0.5 opacity
-          startOffset: Math.random(), // Where in float cycle to start
+          left: point.x + (seededRandom() - 0.5) * 3, // Small random offset
+          top: point.y + (seededRandom() - 0.5) * 3,
+          size: getRandomSize(seededRandom),
+          rotation: baseRotation + (seededRandom() - 0.5) * 10, // ±5° variation
+          delay: seededRandom() * 5, // Stagger fade-in over 0-5 seconds
+          duration: seededRandom() * 9 + 12, // 12-21 seconds for float (3x slower)
+          opacity: seededRandom() * 0.2 + 0.3, // 0.3-0.5 opacity
+          startOffset: seededRandom(), // Where in float cycle to start
         })
       })
     })
@@ -184,36 +194,36 @@ export default function Background() {
     for (let i = 0; i < scatteredCount; i++) {
       // Only edges and corners - completely avoid center (25-75% horizontally, 25-75% vertically)
       let left, top
-      const rand = Math.random()
+      const rand = seededRandom()
       if (rand < 0.33) {
         // Left edge (0-25%)
-        left = Math.random() * 25
-        top = Math.random() * 100
+        left = seededRandom() * 25
+        top = seededRandom() * 100
       } else if (rand < 0.66) {
         // Right edge (75-100%)
-        left = Math.random() * 25 + 75
-        top = Math.random() * 100
+        left = seededRandom() * 25 + 75
+        top = seededRandom() * 100
       } else {
         // Top or bottom edge (avoid center horizontally)
-        left = Math.random() < 0.5 ? Math.random() * 25 : Math.random() * 25 + 75 // 0-25% or 75-100%
-        top = Math.random() < 0.5 ? Math.random() * 25 : Math.random() * 25 + 75 // 0-25% or 75-100%
+        left = seededRandom() < 0.5 ? seededRandom() * 25 : seededRandom() * 25 + 75 // 0-25% or 75-100%
+        top = seededRandom() < 0.5 ? seededRandom() * 25 : seededRandom() * 25 + 75 // 0-25% or 75-100%
       }
       
       prints.push({
         id: `scattered-${i}`,
         left,
         top,
-        size: getRandomSize(),
-        rotation: Math.random() * 360,
-        delay: Math.random() * 5,
-        duration: Math.random() * 9 + 12, // 12-21 seconds for float (3x slower)
-        opacity: Math.random() * 0.2 + 0.3,
-        startOffset: Math.random(),
+        size: getRandomSize(seededRandom),
+        rotation: seededRandom() * 360,
+        delay: seededRandom() * 5,
+        duration: seededRandom() * 9 + 12, // 12-21 seconds for float (3x slower)
+        opacity: seededRandom() * 0.2 + 0.3,
+        startOffset: seededRandom(),
       })
     }
 
     return prints
-  })()
+  }, [mounted]) // Only regenerate when mounted changes
 
   if (!mounted) return null
 

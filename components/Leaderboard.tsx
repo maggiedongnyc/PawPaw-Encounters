@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { getUserProfile, getDisplayName, getAvatarUrl } from '@/lib/profiles'
 
 interface LeaderboardEntry {
   user_id: string
   upload_count: number
   total_likes: number
+  display_name?: string
+  avatar?: string
 }
 
 export default function Leaderboard() {
@@ -56,7 +60,33 @@ export default function Leaderboard() {
           }
         })
 
-        setLeaderboard(entries)
+        // Load display names for all entries
+        const entriesWithNames = await Promise.all(
+          entries.map(async (entry) => {
+            if (entry.user_id === 'anonymous') {
+              return {
+                ...entry,
+                display_name: 'Anonymous User',
+                avatar: '🐕'
+              }
+            }
+            try {
+              const profile = await getUserProfile(entry.user_id)
+              return {
+                ...entry,
+                display_name: profile ? getDisplayName(profile, entry.user_id) : `User ${entry.user_id.slice(0, 8)}`,
+                avatar: profile ? getAvatarUrl(profile) : '🐕'
+              }
+            } catch (error) {
+              return {
+                ...entry,
+                display_name: `User ${entry.user_id.slice(0, 8)}`,
+                avatar: '🐕'
+              }
+            }
+          })
+        )
+        setLeaderboard(entriesWithNames)
       } else {
         const { data, error } = await supabase
           .from('Encounters')
@@ -82,7 +112,33 @@ export default function Leaderboard() {
           .sort((a, b) => b.total_likes - a.total_likes)
           .slice(0, 10)
 
-        setLeaderboard(entries)
+        // Load display names for all entries
+        const entriesWithNames = await Promise.all(
+          entries.map(async (entry) => {
+            if (entry.user_id === 'anonymous') {
+              return {
+                ...entry,
+                display_name: 'Anonymous User',
+                avatar: '🐕'
+              }
+            }
+            try {
+              const profile = await getUserProfile(entry.user_id)
+              return {
+                ...entry,
+                display_name: profile ? getDisplayName(profile, entry.user_id) : `User ${entry.user_id.slice(0, 8)}`,
+                avatar: profile ? getAvatarUrl(profile) : '🐕'
+              }
+            } catch (error) {
+              return {
+                ...entry,
+                display_name: `User ${entry.user_id.slice(0, 8)}`,
+                avatar: '🐕'
+              }
+            }
+          })
+        )
+        setLeaderboard(entriesWithNames)
       }
     } catch (err) {
       console.error('Error fetching leaderboard:', err)
@@ -153,11 +209,20 @@ export default function Leaderboard() {
             >
               <div className="flex items-center gap-4">
                 <div className="text-3xl">{getRankEmoji(index + 1)}</div>
-                <div className="text-4xl">{getDogAvatar(entry.user_id)}</div>
+                <div className="text-4xl">{entry.avatar || getDogAvatar(entry.user_id)}</div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">
-                    {entry.user_id === 'anonymous' ? 'Anonymous User' : `User ${entry.user_id.slice(0, 8)}`}
-                  </p>
+                  {entry.user_id === 'anonymous' ? (
+                    <p className="text-sm font-bold text-gray-900">
+                      {entry.display_name || 'Anonymous User'}
+                    </p>
+                  ) : (
+                    <Link
+                      href={`/profile/${entry.user_id}`}
+                      className="text-sm font-bold text-gray-900 hover:text-yellow-600 transition-colors block"
+                    >
+                      {entry.display_name || `User ${entry.user_id.slice(0, 8)}`}
+                    </Link>
+                  )}
                   <p className="text-xs text-gray-600 flex items-center gap-2 mt-1">
                     <span>📤 {entry.upload_count} uploads</span>
                     <span>•</span>

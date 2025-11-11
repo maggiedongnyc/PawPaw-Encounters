@@ -43,12 +43,87 @@ function UploadPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isGettingLocation, setIsGettingLocation] = useState(false)
+  const [isFetchingNeighborhood, setIsFetchingNeighborhood] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
   const [showPawTrail, setShowPawTrail] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false) // Track if submission is in progress
   const [isEditMode, setIsEditMode] = useState(false) // Track if we're editing an existing encounter
   const [existingEncounter, setExistingEncounter] = useState<any>(null) // Store existing encounter data
   const [countdown, setCountdown] = useState<number | null>(null) // Countdown for redirect in edit mode
+
+  // Form auto-save to localStorage
+  const STORAGE_KEY = 'pawpaw-upload-draft'
+  
+  // Save form data to localStorage
+  useEffect(() => {
+    if (isEditMode) return // Don't auto-save in edit mode
+    
+    const draftData = {
+      description,
+      breed,
+      size,
+      mood,
+      location,
+      locationMethod,
+      currentStep,
+      timestamp: Date.now()
+    }
+    
+    // Only save if there's actual data
+    if (description || breed || size || mood || location) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(draftData))
+      } catch (error) {
+        console.warn('Failed to save draft:', error)
+      }
+    }
+  }, [description, breed, size, mood, location, locationMethod, currentStep, isEditMode])
+
+  // Load draft data from localStorage on mount
+  useEffect(() => {
+    if (isEditMode || !user) return // Don't load draft in edit mode or if not logged in
+    
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const draftData = JSON.parse(saved)
+        // Only load if draft is less than 24 hours old
+        const draftAge = Date.now() - (draftData.timestamp || 0)
+        const oneDay = 24 * 60 * 60 * 1000
+        
+        if (draftAge < oneDay) {
+          // Ask user if they want to restore draft
+          if (confirm('You have a saved draft. Would you like to restore it?')) {
+            setDescription(draftData.description || '')
+            setBreed(draftData.breed || '')
+            setSize(draftData.size || '')
+            setMood(draftData.mood || '')
+            setLocation(draftData.location || null)
+            setLocationMethod(draftData.locationMethod || 'none')
+            setCurrentStep((draftData.currentStep || 1) as Step)
+          } else {
+            // Clear draft if user doesn't want it
+            localStorage.removeItem(STORAGE_KEY)
+          }
+        } else {
+          // Draft is too old, remove it
+          localStorage.removeItem(STORAGE_KEY)
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load draft:', error)
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }, [isEditMode, user])
+
+  // Clear draft on successful submission
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch (error) {
+      console.warn('Failed to clear draft:', error)
+    }
+  }
 
   // Load encounter data if editing
   useEffect(() => {
@@ -136,16 +211,31 @@ function UploadPageContent() {
         const lat = position.coords.latitude
         const lng = position.coords.longitude
         
-        // Try to get neighborhood name
-        const neighborhood = await reverseGeocode(lat, lng)
-        const locationName = neighborhood || `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`
-        
+        // Set location immediately with coordinates
         setLocation({
           lat,
           lng,
-          name: locationName,
+          name: `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`, // Temporary name
         })
         setLocationMethod('current')
+        
+        // Fetch neighborhood name asynchronously
+        setIsFetchingNeighborhood(true)
+        try {
+          const neighborhood = await reverseGeocode(lat, lng)
+          if (neighborhood) {
+            setLocation({
+              lat,
+              lng,
+              name: neighborhood,
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching neighborhood:', error)
+          // Keep the coordinate-based name if geocoding fails
+        } finally {
+          setIsFetchingNeighborhood(false)
+        }
         setIsGettingLocation(false)
       },
       (err) => {
@@ -173,16 +263,31 @@ function UploadPageContent() {
   }
 
   const handleMapLocationSelect = async (lat: number, lng: number) => {
-    // Try to get neighborhood name
-    const neighborhood = await reverseGeocode(lat, lng)
-    const locationName = neighborhood || `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`
-    
+    // Set location immediately with coordinates
     setLocation({
       lat,
       lng,
-      name: locationName,
+      name: `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`, // Temporary name
     })
     setLocationMethod('map')
+    
+    // Fetch neighborhood name asynchronously
+    setIsFetchingNeighborhood(true)
+    try {
+      const neighborhood = await reverseGeocode(lat, lng)
+      if (neighborhood) {
+        setLocation({
+          lat,
+          lng,
+          name: neighborhood,
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching neighborhood:', error)
+      // Keep the coordinate-based name if geocoding fails
+    } finally {
+      setIsFetchingNeighborhood(false)
+    }
   }
 
   const checkAndAwardBadges = async (userId: string) => {
@@ -333,6 +438,7 @@ function UploadPageContent() {
         setSuccess(true)
         setIsSubmitting(false)
         setIsUploading(false)
+        clearDraft() // Clear draft on successful update
         
         // Step 3: Start countdown from 5 seconds
         setCountdown(5)
@@ -364,6 +470,7 @@ function UploadPageContent() {
         setSuccess(true)
         setShowConfetti(true)
         setShowPawTrail(true)
+        clearDraft() // Clear draft on successful submission
         
         // Clear submission flag after successful upload/update
         setIsSubmitting(false)
@@ -504,9 +611,9 @@ function UploadPageContent() {
           )}
 
           {success && (
-            <div className="mb-6 p-4 bg-[#10B981] bg-opacity-10 border border-[#10B981] rounded-md">
-              <p className="text-sm text-[#10B981] font-medium">
-                {isEditMode ? 'Updated! Redirecting...' : 'Encounter uploaded successfully! Redirecting...'}
+            <div className="mb-6">
+              <p className="text-base font-semibold text-[#10B981]">
+                {isEditMode ? '🎉 Encounter Updated Successfully!' : '🎉 Encounter Uploaded Successfully!'}
               </p>
             </div>
           )}
@@ -598,9 +705,11 @@ function UploadPageContent() {
                     onChange={(e) => setDescription(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
                       focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
-                      disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                      disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
+                      placeholder:text-gray-700"
                     placeholder="Describe your doggo encounter..."
                     disabled={isUploading}
+                    style={{ '--tw-placeholder-opacity': '1' } as React.CSSProperties}
                   />
                 </div>
 
@@ -620,9 +729,11 @@ function UploadPageContent() {
                       onChange={(e) => setBreed(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
                         focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
-                        disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                        disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
+                        placeholder:text-gray-700"
                       placeholder="e.g., Golden Retriever"
                       disabled={isUploading}
+                      style={{ '--tw-placeholder-opacity': '1' } as React.CSSProperties}
                     />
                   </div>
 
@@ -639,14 +750,16 @@ function UploadPageContent() {
                       onChange={(e) => setSize(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
                         focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
-                        disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                        disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
+                        text-gray-700"
                       disabled={isUploading}
+                      style={{ color: '#374151' }}
                     >
-                      <option value="">Select size</option>
-                      <option value="small">Small</option>
-                      <option value="medium">Medium</option>
-                      <option value="large">Large</option>
-                      <option value="extra-large">Extra Large</option>
+                      <option value="" style={{ color: '#374151' }}>Select size</option>
+                      <option value="small" style={{ color: '#374151' }}>Small</option>
+                      <option value="medium" style={{ color: '#374151' }}>Medium</option>
+                      <option value="large" style={{ color: '#374151' }}>Large</option>
+                      <option value="extra-large" style={{ color: '#374151' }}>Extra Large</option>
                     </select>
                   </div>
 
@@ -663,16 +776,18 @@ function UploadPageContent() {
                       onChange={(e) => setMood(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm
                         focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:border-[#3B82F6]
-                        disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                        disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors
+                        text-gray-700"
                       disabled={isUploading}
+                      style={{ color: '#374151' }}
                     >
-                      <option value="">Select mood</option>
-                      <option value="happy">😊 Happy</option>
-                      <option value="playful">🎾 Playful</option>
-                      <option value="calm">😌 Calm</option>
-                      <option value="energetic">⚡ Energetic</option>
-                      <option value="sleepy">😴 Sleepy</option>
-                      <option value="curious">🤔 Curious</option>
+                      <option value="" style={{ color: '#374151' }}>Select mood</option>
+                      <option value="happy" style={{ color: '#374151' }}>😊 Happy</option>
+                      <option value="playful" style={{ color: '#374151' }}>🎾 Playful</option>
+                      <option value="calm" style={{ color: '#374151' }}>😌 Calm</option>
+                      <option value="energetic" style={{ color: '#374151' }}>⚡ Energetic</option>
+                      <option value="sleepy" style={{ color: '#374151' }}>😴 Sleepy</option>
+                      <option value="curious" style={{ color: '#374151' }}>🤔 Curious</option>
                     </select>
                   </div>
                 </div>
@@ -733,12 +848,26 @@ function UploadPageContent() {
                   </div>
                 )}
 
-                {/* Location Display */}
+                {/* Location Display - Show below map, same width as map */}
                 {location && (
-                  <div className="p-4 bg-[#10B981] bg-opacity-10 border-2 border-[#10B981] rounded-md">
-                    <p className="text-sm font-medium text-[#10B981]">
-                      ✓ Location Selected: {location.name}
-                    </p>
+                  <div className="mt-4">
+                    <div className="w-full px-4 py-2 bg-[#10B981] bg-opacity-10 border-2 border-[#10B981] rounded-md">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">✓</span>
+                        <div className="flex-1">
+                          {isFetchingNeighborhood ? (
+                            <p className="text-sm text-gray-600 flex items-center gap-2">
+                              <span className="inline-block w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                              Finding neighborhood name...
+                            </p>
+                          ) : (
+                            <p className="text-sm font-medium text-gray-900">
+                              📍 {location.name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 

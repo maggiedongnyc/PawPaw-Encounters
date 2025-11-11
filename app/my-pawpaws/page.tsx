@@ -95,8 +95,10 @@ export default function MyPawPawsPage() {
     fetchMyEncounters()
 
     // Set up real-time subscription for user's encounters
+    // Use unique channel name to prevent conflicts
+    const channelName = `my-encounters-changes-${user.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const channel = supabase
-      .channel('my-encounters-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -150,10 +152,19 @@ export default function MyPawPawsPage() {
           })
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Subscribed to my encounters changes')
+        }
+      })
 
     return () => {
-      supabase.removeChannel(channel)
+      channel.unsubscribe().then(() => {
+        supabase.removeChannel(channel)
+      }).catch((err) => {
+        console.warn('Error unsubscribing from my encounters channel:', err)
+        supabase.removeChannel(channel)
+      })
     }
   }, [user])
 
@@ -440,6 +451,7 @@ export default function MyPawPawsPage() {
     })
   }
 
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -513,6 +525,16 @@ export default function MyPawPawsPage() {
             >
               📸 Upload New
             </Link>
+            <Link
+              href={`/profile/${user?.id}`}
+              className="px-6 py-3 text-sm font-fredoka font-semibold text-white rounded-lg transition-all"
+              style={{
+                background: 'linear-gradient(to right, #8B5CF6, #A78BFA)',
+                boxShadow: '0 10px 25px rgba(139, 92, 246, 0.4)'
+              }}
+            >
+              👤 View Profile
+            </Link>
           </div>
         </div>
 
@@ -560,7 +582,8 @@ export default function MyPawPawsPage() {
                 const location = parseLocation(encounter.location)
                 const encounterComments = commentsByEncounter[encounter.id] || []
                 const commentCount = commentCounts[encounter.id] || 0
-                const firstTwoComments = encounterComments.slice(0, 2)
+                const isExpanded = selectedEncounter === encounter.id
+                const commentsToShow = isExpanded ? encounterComments : encounterComments.slice(0, 2)
                 
                 return (
                   <div
@@ -589,26 +612,26 @@ export default function MyPawPawsPage() {
 
                     {/* Content */}
                     <div className="p-5">
-                      {/* Delete button for own encounters */}
-                      <div className="flex justify-end gap-2 mb-2">
+                      {/* Title - Always at the top */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <h3 className="text-lg font-semibold line-clamp-2 flex-1" style={{ color: '#5C3D2E' }}>
+                          {encounter.description}
+                        </h3>
+                        {/* Delete button for own encounters - small and unobtrusive */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation() // Prevent double-click from triggering
                             handleDeleteEncounter(encounter.id)
                           }}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded-md hover:bg-gray-100"
+                          className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded-md hover:bg-gray-100 flex-shrink-0"
                           title="Delete encounter"
+                          aria-label="Delete encounter"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
-
-                      {/* Description */}
-                      <h3 className="text-lg font-semibold mb-3 line-clamp-2" style={{ color: '#5C3D2E' }}>
-                        {encounter.description}
-                      </h3>
 
                       {/* Tags with Emojis */}
                       <div className="flex flex-wrap gap-2 mb-4">
@@ -632,13 +655,22 @@ export default function MyPawPawsPage() {
                         )}
                       </div>
 
-                      {/* Location - Neighborhood Name */}
-                      {location && (
-                        <div className="flex items-center text-sm mb-4" style={{ color: '#5C3D2E' }}>
-                          <span className="text-xl mr-2">📍</span>
-                          <span className="truncate font-medium">{getLocationName(encounter)}</span>
+                      {/* Location and Date - Combined */}
+                      <div className="flex items-center gap-3 text-xs mb-3" style={{ color: '#5C3D2E', opacity: 0.7 }}>
+                        {location && (
+                          <div className="flex items-center gap-1">
+                            <span>📍</span>
+                            <span className="truncate font-medium">{getLocationName(encounter)}</span>
+                          </div>
+                        )}
+                        {location && (
+                          <span className="text-gray-300">•</span>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <span>📅</span>
+                          <span>{formatDate(encounter.created_at)}</span>
                         </div>
-                      )}
+                      </div>
 
                       {/* Likes and Comments Count */}
                       <div className="flex items-center justify-between mb-3">
@@ -648,11 +680,25 @@ export default function MyPawPawsPage() {
                           encounterId={encounter.id}
                         />
                         <button
-                          onClick={() => setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)}
-                          className="flex items-center gap-1 text-sm font-medium transition-colors cursor-pointer hover:opacity-80"
+                          onClick={() => {
+                            if (commentCount > 2) {
+                              setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)
+                            }
+                          }}
+                          className={`flex items-center gap-1 text-sm font-medium transition-colors ${
+                            commentCount > 2 ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                          }`}
                           style={{ color: '#5C3D2E' }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = '#FFB500'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = '#5C3D2E'}
+                          onMouseEnter={(e) => {
+                            if (commentCount > 2) {
+                              e.currentTarget.style.color = '#FFB500'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (commentCount > 2) {
+                              e.currentTarget.style.color = '#5C3D2E'
+                            }
+                          }}
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -661,11 +707,11 @@ export default function MyPawPawsPage() {
                         </button>
                       </div>
 
-                      {/* First 2 Comments */}
-                      {firstTwoComments.length > 0 && (
+                      {/* Comments Preview (first 2, or all if expanded) */}
+                      {commentsToShow.length > 0 && (
                         <div className="mb-3 pt-3 border-t border-gray-200">
                           <div className="space-y-2">
-                            {firstTwoComments.map((comment) => (
+                            {commentsToShow.map((comment) => (
                               <div key={comment.id} className="p-2 bg-gray-50 rounded-md">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1">
@@ -712,12 +758,7 @@ export default function MyPawPawsPage() {
                         </div>
                       )}
 
-                      {/* Date */}
-                      <p className="text-xs mb-2 font-medium" style={{ color: '#5C3D2E', opacity: 0.8 }}>
-                        📅 {formatDate(encounter.created_at)}
-                      </p>
-
-                      {/* View All Comments Button */}
+                      {/* View All / Show Less Comments Button */}
                       {commentCount > 2 && (
                         <button
                           onClick={() => setSelectedEncounter(selectedEncounter === encounter.id ? null : encounter.id)}
@@ -736,15 +777,8 @@ export default function MyPawPawsPage() {
                             e.currentTarget.style.borderColor = '#FFC845'
                           }}
                         >
-                          View all {commentCount} comments
+                          {isExpanded ? 'Show less' : `View all ${commentCount} comments`}
                         </button>
-                      )}
-
-                      {/* Full Comments Section (when expanded) */}
-                      {selectedEncounter === encounter.id && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <Comments encounterId={encounter.id} />
-                        </div>
                       )}
                     </div>
                   </div>

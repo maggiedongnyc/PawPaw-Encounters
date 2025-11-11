@@ -260,14 +260,17 @@ export default function MapView({ encounters }: MapViewProps) {
 
       const popupContent = `
         <div style="padding: 12px; min-width: 250px;">
-          <img src="${encounter.photo_url}" alt="${encounter.description}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" />
+          <a href="/encounter/${encounter.id}" style="text-decoration: none; color: inherit; display: block; cursor: pointer;" onclick="window.location.href='/encounter/${encounter.id}'; return false;">
+            <img src="${encounter.photo_url}" alt="${encounter.description}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
+          </a>
           <p style="font-weight: 600; font-size: 14px; margin-bottom: 8px; line-height: 1.4;">${encounter.description}</p>
           ${tagsHtml.length > 0 ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;">${tagsHtml.join('')}</div>` : ''}
-          <p style="font-size: 12px; color: #666; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+          <p style="font-size: 12px; color: #666; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
             <span>📍</span>
             <span>${neighborhoodNames[encounter.id] || location.name || `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}</span>
           </p>
-          ${isNew ? '<div style="color: #EAB308; font-weight: bold; font-size: 12px; margin-top: 8px; animation: pulse 2s ease-in-out infinite;">NEW! 🎉</div>' : ''}
+          ${isNew ? '<div style="color: #EAB308; font-weight: bold; font-size: 12px; margin-top: 8px; margin-bottom: 8px; animation: pulse 2s ease-in-out infinite;">NEW! 🎉</div>' : ''}
+          <p style="font-size: 11px; color: #999; margin-top: 8px; text-align: center; font-style: italic;">Click photo to view full profile</p>
         </div>
       `
 

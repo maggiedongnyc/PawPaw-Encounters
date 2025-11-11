@@ -25,6 +25,47 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Placeholder text styling - darker grey for better visibility */
+::placeholder {
+  color: #374151 !important; /* gray-700 - much darker grey */
+  opacity: 1 !important;
+}
+
+input::placeholder,
+textarea::placeholder,
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="tel"]::placeholder,
+textarea::placeholder {
+  color: #374151 !important; /* gray-700 - much darker grey */
+  opacity: 1 !important;
+}
+
+/* Additional specificity for form inputs */
+input[placeholder],
+textarea[placeholder] {
+  color: #374151 !important;
+}
+
+input[placeholder]::placeholder,
+textarea[placeholder]::placeholder {
+  color: #374151 !important;
+  opacity: 1 !important;
+}
+
+/* Select dropdown text - match placeholder color */
+select {
+  color: #374151 !important; /* gray-700 - darker grey to match placeholders */
+}
+
+select option {
+  color: #374151 !important; /* gray-700 - darker grey for options */
+}
+
+select option[value=""] {
+  color: #374151 !important; /* gray-700 - darker grey for placeholder option */
+}
+
 /* Hero Section Animations */
 @keyframes pawFadeIn {
   0% {
